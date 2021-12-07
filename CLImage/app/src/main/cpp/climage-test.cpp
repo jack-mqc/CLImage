@@ -17,17 +17,9 @@
 #include <jni.h>
 #include <string>
 
-#define CL_TARGET_OPENCL_VERSION 200
-#define CL_HPP_TARGET_OPENCL_VERSION 200
-#define CL_HPP_ENABLE_EXCEPTIONS true
-
-// Include cl_icd_wrapper.h before <CL/*>
-#include "gls_icd_wrapper.h"
-
-#include "CL/opencl.hpp"
+#include "gls_cl.hpp"
 
 #include "gls_logging.h"
-#include "cl_error.h"
 
 static const char* TAG = "CLImage Test";
 
@@ -46,7 +38,7 @@ cl::Context getContext() {
                 platform = p;
             }
         }
-        if (platform() == 0) {
+        if (platform() == nullptr) {
             throw cl::Error(-1, "No OpenCL 2.0 platform found.");
         }
 
@@ -86,11 +78,10 @@ Java_com_glassimaging_climage_TestCLImage_testCLImage(
     try {
         cl::Context context = getContext();
         cl::Context::setDefault(context);
-        return 0;
+        return nullptr;
     } catch (cl::Error& err) {
-        LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what()) << " - " << clStatusToString(
-                err.err())
-                       << std::endl;
+        LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what())
+                       << " - " << gls::clStatusToString(err.err()) << std::endl;
     }
 
     std::string hello = "Hello from C++";

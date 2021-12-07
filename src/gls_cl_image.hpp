@@ -14,10 +14,10 @@
  * limitations under the License.
  ******************************************************************************/
 
-#ifndef cl_image_h
-#define cl_image_h
+#ifndef CL_IMAGE_H
+#define CL_IMAGE_H
 
-#include "gls_opencl.hpp"
+#include "gls_cl.hpp"
 #include "cl_support.h"
 #include "gls_image.hpp"
 
@@ -84,7 +84,7 @@ class cl_image_2d : public cl_image<T> {
                              image<T>::pixel_size * image<T>::width, 0, other->pixels().data());
     }
 
-    image<T> mapImage() {
+    virtual image<T> mapImage() {
         size_t row_pitch;
         size_t slice_pitch;
         cl::CommandQueue queue = cl::CommandQueue::getDefault();
@@ -126,7 +126,7 @@ class cl_image_buffer_2d : public cl_image_2d<T> {
         return std::make_unique<payload>(payload{{image}, buffer});
     }
 
-    image<T> mapImage() {
+    override image<T> mapImage() {
         size_t pixel_count = image<T>::width * image<T>::height;
         T* image_data =
             cl::enqueueMapBuffer(getBuffer(), true, CL_MAP_READ | CL_MAP_WRITE, 0, image<T>::pixel_size * pixel_count);
@@ -290,4 +290,4 @@ inline cl::ImageFormat cl_image<gls::rgba_pixel_fp16>::ImageFormat() {
 
 }  // namespace gls
 
-#endif /* cl_image_h */
+#endif /* CL_IMAGE_H */

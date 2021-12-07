@@ -14,13 +14,34 @@
  * limitations under the License.
  ******************************************************************************/
 
-#ifndef CL_ERROR_H
-#define CL_ERROR_H
+#ifndef GLS_CL_HPP
+#define GLS_CL_HPP
 
-#include <string>
+#define CL_HPP_ENABLE_EXCEPTIONS
 
-#include "CL/cl.h"
+#ifdef __APPLE__
+#define CL_HPP_MINIMUM_OPENCL_VERSION 120
+#define CL_HPP_TARGET_OPENCL_VERSION 120
+#define CL_HPP_USE_CL_IMAGE2D_FROM_BUFFER_KHR true
 
-std::string clStatusToString(cl_int status);
+#include <OpenCL/cl_ext.h>
 
-#endif  // CL_ERROR_H
+#include "CL/opencl.hpp"
+#elif __ANDROID__
+#include <map>
+
+#define CL_TARGET_OPENCL_VERSION 200
+#define CL_HPP_TARGET_OPENCL_VERSION 200
+
+// Include cl_icd_wrapper.h before <CL/*>
+#include "gls_icd_wrapper.h"
+
+#include <CL/cl_ext.h>
+
+#include <CL/opencl.hpp>
+#endif
+
+namespace gls {
+    std::string clStatusToString(cl_int status);
+}  // namespace gls
+#endif /* GLS_CL_HPP */

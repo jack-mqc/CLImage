@@ -15,10 +15,13 @@
  ******************************************************************************/
 
 #include <map>
+#include <string>
 
-#include "cl_error.h"
+#include "CL/cl.h"
 
-static const std::map<int, std::string> error_codes = {
+namespace gls {
+
+static const std::map<int, const std::string> error_codes = {
     { CL_SUCCESS, "CL_SUCCESS" },
     { CL_DEVICE_NOT_FOUND, "CL_DEVICE_NOT_FOUND" },
     { CL_DEVICE_NOT_AVAILABLE, "CL_DEVICE_NOT_AVAILABLE" },
@@ -89,3 +92,5 @@ std::string clStatusToString(cl_int status) {
     return error_entry != error_codes.end() ? error_entry->second
                                             : "Unknown Error: " + std::to_string(status);
 }
+
+} // namespace gls

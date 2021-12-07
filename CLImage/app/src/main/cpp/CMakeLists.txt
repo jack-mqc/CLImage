@@ -29,7 +29,7 @@ add_library( # Sets the name of the library.
 
         # Provides a relative path to your source file(s).
         climage/gls_icd_wrapper.cpp
-        climage/cl_error.cpp
+        climage/gls_cl_error.cpp
         climage/gls_logging.cpp
         climage-test.cpp)
 
