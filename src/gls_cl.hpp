@@ -42,6 +42,8 @@
 #endif
 
 namespace gls {
+    cl::Context getContext();
+
     std::string clStatusToString(cl_int status);
 }  // namespace gls
 #endif /* GLS_CL_HPP */

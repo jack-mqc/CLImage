@@ -31,6 +31,7 @@ add_library( # Sets the name of the library.
         climage/gls_icd_wrapper.cpp
         climage/gls_cl_error.cpp
         climage/gls_logging.cpp
+        climage/gls_cl.cpp
         climage-test.cpp)
 
 # Add header files for opencl
