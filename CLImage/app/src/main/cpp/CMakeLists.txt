@@ -9,6 +9,13 @@ cmake_minimum_required(VERSION 3.10.2)
 
 project("climage")
 
+add_library( libz STATIC IMPORTED )
+set_target_properties( libz PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/jni/${ANDROID_ABI}/libz.a )
+add_library( libpng STATIC IMPORTED )
+set_target_properties( libpng PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/jni/${ANDROID_ABI}/libpng.a )
+add_library( libjpg STATIC IMPORTED )
+set_target_properties( libjpg PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/jni/${ANDROID_ABI}/libjpeg-turbo.a )
+
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
 # You can define multiple libraries, and CMake builds them for you.
@@ -53,3 +60,23 @@ target_link_libraries( # Specifies the target library.
         # Links the target library to the log library
         # included in the NDK.
         ${log-lib})
+
+add_executable(
+        CLImageTest
+        climage/gls_image.hpp
+        climage/gls_image_jpeg.cpp
+        main.cpp
+)
+
+target_link_libraries( # Specifies the target library.
+        CLImageTest
+        libjpg
+        libpng
+        libz
+        ${log-lib}
+        )
+
+target_compile_options( CLImageTest PRIVATE -Wall -Werror -DUSE_IOSTREAM_LOG -DCOMMAND_LINE_TOOL )
+
+target_include_directories( CLImageTest PRIVATE ${CMAKE_SOURCE_DIR}/headers )
+target_include_directories( CLImageTest PRIVATE ${CMAKE_SOURCE_DIR}/climage )
