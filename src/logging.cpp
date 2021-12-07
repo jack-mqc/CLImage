@@ -20,18 +20,17 @@
 
 #include <sstream>
 
-struct AndroidLogBuf : public std::streambuf
-{
-    AndroidLogBuf() {}
+struct AndroidLogBuf : public std::streambuf {
+    AndroidLogBuf() = default;
 
-    std::streambuf& operator () (android_LogPriority PRIORITY, const std::string TAG) {
+    std::streambuf &operator()(android_LogPriority PRIORITY, const std::string TAG) {
         _PRIORITY = PRIORITY;
         _TAG = TAG;
         return *this;
     }
 
 protected:
-    std::streamsize xsputn(const char_type* s, std::streamsize n) override {
+    std::streamsize xsputn(const char_type *s, std::streamsize n) override {
         _buf.sputn(s, n);
         return n;
     }
@@ -49,9 +48,9 @@ private:
     std::stringbuf _buf;
 };
 
-std::ostream __log_prefix(android_LogPriority level, const std::string TAG) {
-    static auto cbsbuf = AndroidLogBuf();
-    return std::ostream(&cbsbuf(level, TAG));
+std::ostream __log_prefix(android_LogPriority level, const std::string& TAG) {
+    static auto buf = AndroidLogBuf();
+    return std::ostream(&buf(level, TAG));
 }
 
 #else

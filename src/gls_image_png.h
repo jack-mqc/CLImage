@@ -14,29 +14,21 @@
  * limitations under the License.
  ******************************************************************************/
 
-#ifndef LEICA_PHOTO_APP_X_ANDROID_LOGGER_H
-#define LEICA_PHOTO_APP_X_ANDROID_LOGGER_H
+#ifndef gls_image_png_h
+#define gls_image_png_h
 
-#include <iostream>
+#include <functional>
+#include <string>
+#include <vector>
 
-#if defined(__ANDROID__) && !defined(USE_IOSTREAM_LOG)
+namespace gls {
 
-#include <android/log.h>
+int read_png_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
+                  std::function<bool(int width, int height, std::vector<uint8_t*>* row_pointers)> image_allocator);
 
-std::ostream __log_prefix(android_LogPriority level, const std::string& TAG);
+int write_png_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
+                   std::function<uint8_t* (int row)> row_pointer);
 
-#define LOG_INFO(TAG) __log_prefix(ANDROID_LOG_INFO, TAG)
-#define LOG_ERROR(TAG) __log_prefix(ANDROID_LOG_ERROR, TAG)
-#define LOG_DEBUG(TAG) __log_prefix(ANDROID_LOG_DEBUG, TAG)
+}
 
-#else
-
-std::ostream& __log_prefix(std::ostream& os);
-
-#define LOG_INFO(TAG) (__log_prefix(std::cout) << "I/" << TAG << ": ")
-#define LOG_ERROR(TAG) (__log_prefix(std::cerr) << "E/" << TAG << ": ")
-#define LOG_DEBUG(TAG) (__log_prefix(std::cout) << "D/" << TAG << ": ")
-
-#endif
-
-#endif  // LEICA_PHOTO_APP_X_ANDROID_LOGGER_H
+#endif /* gls_image_png_h */
