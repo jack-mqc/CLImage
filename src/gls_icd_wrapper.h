@@ -14,8 +14,8 @@
  * limitations under the License.
  ******************************************************************************/
 
-#ifndef LEICAPHOTOAPPX_CL_ICD_WRAPPER_H
-#define LEICAPHOTOAPPX_CL_ICD_WRAPPER_H
+#ifndef GLS_ICD_WRAPPER_H
+#define GLS_ICD_WRAPPER_H
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -23,6 +23,7 @@
 #include "CL/cl_icd.h"
 
 #define CL_WRAPPER_NS opencl
+#define CL_USE_FUNCTION_POINTERS
 
 namespace CL_WRAPPER_NS {
 
@@ -214,4 +215,4 @@ extern cl_api_clSetContextDestructorCallback clSetContextDestructorCallback;
 #pragma clang diagnostic pop
 
 }
-#endif //LEICAPHOTOAPPX_CL_ICD_WRAPPER_H
+#endif  // GLS_ICD_WRAPPER_H

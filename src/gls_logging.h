@@ -14,31 +14,29 @@
  * limitations under the License.
  ******************************************************************************/
 
-#ifndef cl_opencl_h
-#define cl_opencl_h
+#ifndef GLS_LOGGING_H
+#define GLS_LOGGING_H
 
-#define CL_HPP_ENABLE_EXCEPTIONS
+#include <iostream>
 
-#ifdef __APPLE__
-#define CL_HPP_MINIMUM_OPENCL_VERSION 120
-#define CL_HPP_TARGET_OPENCL_VERSION 120
-#define CL_HPP_USE_CL_IMAGE2D_FROM_BUFFER_KHR true
+#if defined(__ANDROID__) && !defined(USE_IOSTREAM_LOG)
 
-#include <OpenCL/cl_ext.h>
+#include <android/log.h>
 
-#include "CL/opencl.hpp"
-#elif __ANDROID__
-#include <map>
+std::ostream __log_prefix(android_LogPriority level, const std::string& TAG);
 
-#define CL_TARGET_OPENCL_VERSION 200
-#define CL_HPP_TARGET_OPENCL_VERSION 200
+#define LOG_INFO(TAG) __log_prefix(ANDROID_LOG_INFO, TAG)
+#define LOG_ERROR(TAG) __log_prefix(ANDROID_LOG_ERROR, TAG)
+#define LOG_DEBUG(TAG) __log_prefix(ANDROID_LOG_DEBUG, TAG)
 
-// Include cl_icd_wrapper.h before <CL/*>
-#include "cl_icd_wrapper.h"
+#else
 
-#include <CL/cl_ext.h>
+std::ostream& __log_prefix(std::ostream& os);
 
-#include <CL/opencl.hpp>
+#define LOG_INFO(TAG) (__log_prefix(std::cout) << "I/" << TAG << ": ")
+#define LOG_ERROR(TAG) (__log_prefix(std::cerr) << "E/" << TAG << ": ")
+#define LOG_DEBUG(TAG) (__log_prefix(std::cout) << "D/" << TAG << ": ")
+
 #endif
 
-#endif /* cl_opencl_h */
+#endif  // GLS_LOGGING_H

@@ -14,8 +14,8 @@
  * limitations under the License.
  ******************************************************************************/
 
-#ifndef gls_image_png_h
-#define gls_image_png_h
+#ifndef GLS_IMAGE_PNG_H
+#define GLS_IMAGE_PNG_H
 
 #include <functional>
 #include <string>
@@ -31,4 +31,4 @@ int write_png_file(const std::string& filename, int width, int height, int pixel
 
 }
 
-#endif /* gls_image_png_h */
+#endif /* GLS_IMAGE_PNG_H */

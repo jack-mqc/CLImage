@@ -14,7 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
-#include "logging.h"
+#include "gls_logging.h"
 
 #if defined(__ANDROID__) && !defined(USE_IOSTREAM_LOG)
 

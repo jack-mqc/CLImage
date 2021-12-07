@@ -17,7 +17,7 @@
 #ifndef cl_image_h
 #define cl_image_h
 
-#include "cl_opencl.hpp"
+#include "gls_opencl.hpp"
 #include "cl_support.h"
 #include "gls_image.hpp"
 

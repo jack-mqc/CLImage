@@ -14,8 +14,8 @@
  * limitations under the License.
  ******************************************************************************/
 
-#ifndef gls_image_jpeg_hpp
-#define gls_image_jpeg_hpp
+#ifndef GLS_IMAGE_JPEG_HPP
+#define GLS_IMAGE_JPEG_HPP
 
 #include <functional>
 #include <string>
@@ -30,4 +30,4 @@ int write_jpeg_file(const std::string& fileName, int width, int height, int pixe
                     std::function<std::span<uint8_t>()> image_data, int quality);
 
 }
-#endif /* gls_image_jpeg_hpp */
+#endif /* GLS_IMAGE_JPEG_HPP */

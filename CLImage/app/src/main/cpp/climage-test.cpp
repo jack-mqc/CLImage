@@ -22,11 +22,11 @@
 #define CL_HPP_ENABLE_EXCEPTIONS true
 
 // Include cl_icd_wrapper.h before <CL/*>
-#include "cl_icd_wrapper.h"
+#include "gls_icd_wrapper.h"
 
 #include "CL/opencl.hpp"
 
-#include "logging.h"
+#include "gls_logging.h"
 #include "cl_error.h"
 
 static const char* TAG = "CLImage Test";
@@ -88,7 +88,8 @@ Java_com_glassimaging_climage_TestCLImage_testCLImage(
         cl::Context::setDefault(context);
         return 0;
     } catch (cl::Error& err) {
-        LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what()) << " - " << getOpenCLError(err.err())
+        LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what()) << " - " << clStatusToString(
+                err.err())
                        << std::endl;
     }
 

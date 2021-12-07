@@ -14,11 +14,13 @@
  * limitations under the License.
  ******************************************************************************/
 
-#ifndef LEICAPHOTOAPPX_CL_ERROR_H
-#define LEICAPHOTOAPPX_CL_ERROR_H
+#ifndef CL_ERROR_H
+#define CL_ERROR_H
 
 #include <string>
 
-std::string getOpenCLError(int error_code);
+#include "CL/cl.h"
 
-#endif  // LEICAPHOTOAPPX_CL_ERROR_H
+std::string clStatusToString(cl_int status);
+
+#endif  // CL_ERROR_H

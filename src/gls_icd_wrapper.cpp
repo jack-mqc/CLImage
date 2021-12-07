@@ -16,14 +16,14 @@
 
 #include <dlfcn.h>
 
-#include "logging.h"
+#include "gls_logging.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
 #define CL_TARGET_OPENCL_VERSION 220
 
-#include "cl_icd_wrapper.h"
+#include "gls_icd_wrapper.h"
 
 namespace CL_WRAPPER_NS {
 

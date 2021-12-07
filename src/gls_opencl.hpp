@@ -14,29 +14,31 @@
  * limitations under the License.
  ******************************************************************************/
 
-#ifndef LEICA_PHOTO_APP_X_ANDROID_LOGGER_H
-#define LEICA_PHOTO_APP_X_ANDROID_LOGGER_H
+#ifndef GLS_OPENCL_HPP
+#define GLS_OPENCL_HPP
 
-#include <iostream>
+#define CL_HPP_ENABLE_EXCEPTIONS
 
-#if defined(__ANDROID__) && !defined(USE_IOSTREAM_LOG)
+#ifdef __APPLE__
+#define CL_HPP_MINIMUM_OPENCL_VERSION 120
+#define CL_HPP_TARGET_OPENCL_VERSION 120
+#define CL_HPP_USE_CL_IMAGE2D_FROM_BUFFER_KHR true
 
-#include <android/log.h>
+#include <OpenCL/cl_ext.h>
 
-std::ostream __log_prefix(android_LogPriority level, const std::string& TAG);
+#include "CL/opencl.hpp"
+#elif __ANDROID__
+#include <map>
 
-#define LOG_INFO(TAG) __log_prefix(ANDROID_LOG_INFO, TAG)
-#define LOG_ERROR(TAG) __log_prefix(ANDROID_LOG_ERROR, TAG)
-#define LOG_DEBUG(TAG) __log_prefix(ANDROID_LOG_DEBUG, TAG)
+#define CL_TARGET_OPENCL_VERSION 200
+#define CL_HPP_TARGET_OPENCL_VERSION 200
 
-#else
+// Include cl_icd_wrapper.h before <CL/*>
+#include "cl_icd_wrapper.h"
 
-std::ostream& __log_prefix(std::ostream& os);
+#include <CL/cl_ext.h>
 
-#define LOG_INFO(TAG) (__log_prefix(std::cout) << "I/" << TAG << ": ")
-#define LOG_ERROR(TAG) (__log_prefix(std::cerr) << "E/" << TAG << ": ")
-#define LOG_DEBUG(TAG) (__log_prefix(std::cout) << "D/" << TAG << ": ")
-
+#include <CL/opencl.hpp>
 #endif
 
-#endif  // LEICA_PHOTO_APP_X_ANDROID_LOGGER_H
+#endif /* GLS_OPENCL_HPP */

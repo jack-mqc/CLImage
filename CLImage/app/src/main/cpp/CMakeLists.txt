@@ -28,9 +28,9 @@ add_library( # Sets the name of the library.
         SHARED
 
         # Provides a relative path to your source file(s).
-        climage/cl_icd_wrapper.cpp
+        climage/gls_icd_wrapper.cpp
         climage/cl_error.cpp
-        climage/logging.cpp
+        climage/gls_logging.cpp
         climage-test.cpp)
 
 # Add header files for opencl

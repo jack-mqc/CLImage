@@ -14,8 +14,8 @@
  * limitations under the License.
  ******************************************************************************/
 
-#ifndef gls_image_h
-#define gls_image_h
+#ifndef GLS_IMAGE_H
+#define GLS_IMAGE_H
 
 #include <sys/types.h>
 
@@ -324,4 +324,4 @@ class image_3d : public image<T> {
 
 }  // namespace gls
 
-#endif /* gls_image_h */
+#endif /* GLS_IMAGE_H */
