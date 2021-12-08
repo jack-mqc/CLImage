@@ -91,10 +91,9 @@ cl::Context getContext() {
         cl::Context::setDefault(context);
 
         initialized = true;
+    }
 
-        return context;
-    } else
-        return cl::Context::getDefault();
+    return cl::Context::getDefault();
 }
 #endif
 

@@ -42,18 +42,6 @@ int blur(const gls::cl_image_2d<gls::rgba_pixel>& input, gls::cl_image_2d<gls::r
     }
 }
 
-int initializeOpenCL() {
-    try {
-        cl::Context context = gls::getContext();
-        cl::Context::setDefault(context);
-        return 0;
-    } catch (cl::Error& err) {
-        LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what()) << " - " << gls::clStatusToString(err.err())
-                       << std::endl;
-        return -1;
-    }
-}
-
 extern "C" JNIEXPORT jint JNICALL
 Java_com_glassimaging_climage_TestCLImage_testCLImage(
         JNIEnv* env,
@@ -61,21 +49,18 @@ Java_com_glassimaging_climage_TestCLImage_testCLImage(
         jobject assetManager,
         jobject inputBitmap,
         jobject outputBitmap) {
-
-    // Load and bind OpenCL library
-    initializeOpenCL();
-
-    // Load OpenCL Shader resources
-    loadOpenCLShaders(env, assetManager, gls::getShadersMap());
-
     // Bind input and output Bitmaps
     AndroidBitmap input(env, inputBitmap);
     AndroidBitmap output(env, outputBitmap);
 
+    // Initialize OpenCL
+    cl::Context context = gls::getContext();
+
+    // Load OpenCL Shader resources
+    loadOpenCLShaders(env, assetManager, gls::getShadersMap());
+
     // Load and bind OpenCL library
     try {
-        const auto context = gls::getContext();
-
         // Input Image
         gls::cl_image_2d<gls::rgba_pixel>::unique_ptr inputImage;
         {
