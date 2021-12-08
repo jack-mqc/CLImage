@@ -32,7 +32,7 @@ add_library( # Sets the name of the library.
         climage/gls_cl_error.cpp
         climage/gls_logging.cpp
         climage/gls_cl.cpp
-        climage/android_support.cpp
+        climage/gls_android_support.cpp
         climage-test.cpp)
 
 # Add header files for opencl

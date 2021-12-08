@@ -1,6 +1,18 @@
-//
-// Created by Fabio Riccardi on 9/9/21.
-//
+/*******************************************************************************
+ * Copyright (c) 2021 Glass Imaging Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 
 #include <string>
 #include <vector>
@@ -11,8 +23,10 @@
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
 
-#include "android_support.h"
+#include "gls_android_support.h"
 #include "gls_logging.h"
+
+namespace gls {
 
 static const char *TAG = "AndroidSupport";
 
@@ -45,7 +59,7 @@ void loadOpenCLShaders(JNIEnv *env, jobject assetManager,
 }
 
 void loadOpenCLBytecode(JNIEnv *env, jobject assetManager,
-                       std::map<std::string, std::vector<unsigned char>> *bytecodes) {
+                        std::map<std::string, std::vector<unsigned char>> *bytecodes) {
     AAssetManager *mgr = AAssetManager_fromJava(env, assetManager);
     AAssetDir *assetDir = AAssetManager_openDir(mgr, "");
     const char *asset_filename;
@@ -66,7 +80,7 @@ void loadOpenCLBytecode(JNIEnv *env, jobject assetManager,
 }
 
 void loadResourceData(JNIEnv *env, jobject assetManager,
-                      std::vector <std::byte> *modelData,
+                      std::vector<std::byte> *modelData,
                       const std::string &resourceName) {
     AAssetManager *mgr = AAssetManager_fromJava(env, assetManager);
     AAssetDir *assetDir = AAssetManager_openDir(mgr, "");
@@ -84,3 +98,5 @@ void loadResourceData(JNIEnv *env, jobject assetManager,
     }
     AAssetDir_close(assetDir);
 }
+
+}  // namespace gls

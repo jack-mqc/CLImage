@@ -17,7 +17,7 @@
 #include <jni.h>
 #include <string>
 
-#include "android_support.h"
+#include "gls_android_support.h"
 
 #include "gls_cl.hpp"
 #include "gls_logging.h"
@@ -50,14 +50,14 @@ Java_com_glassimaging_climage_TestCLImage_testCLImage(
         jobject inputBitmap,
         jobject outputBitmap) {
     // Bind input and output Bitmaps
-    AndroidBitmap input(env, inputBitmap);
-    AndroidBitmap output(env, outputBitmap);
+    gls::AndroidBitmap input(env, inputBitmap);
+    gls::AndroidBitmap output(env, outputBitmap);
 
     // Initialize OpenCL
     cl::Context context = gls::getContext();
 
     // Load OpenCL Shader resources
-    loadOpenCLShaders(env, assetManager, gls::getShadersMap());
+    gls::loadOpenCLShaders(env, assetManager, gls::getShadersMap());
 
     // Load and bind OpenCL library
     try {
