@@ -91,10 +91,10 @@ class cl_image_2d : public cl_image<T> {
             (T*)queue.enqueueMapImage(_payload->image, CL_TRUE, CL_MAP_READ | CL_MAP_WRITE, {0, 0, 0},
                                       {(size_t)image<T>::width, (size_t)image<T>::height, 1}, &row_pitch, &slice_pitch);
         assert(image_data != nullptr);
-        assert(row_pitch == image<T>::pixel_size * image<T>::width);
 
-        size_t data_size = image<T>::width * image<T>::height;
-        return gls::image(image<T>::width, image<T>::height, std::span<T>(image_data, data_size));
+        size_t stride = row_pitch / image<T>::pixel_size;
+        size_t data_size = stride * image<T>::height;
+        return gls::image(image<T>::width, image<T>::height, stride, std::span<T>(image_data, data_size));
     }
 
     void unmapImage(const image<T>& mappedImage) { cl::enqueueUnmapMemObject(_payload->image, (void*)mappedImage[0]); }

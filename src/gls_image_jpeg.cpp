@@ -98,7 +98,7 @@ int read_jpeg_file(const std::string& filename, int pixel_channels, int pixel_bi
     return 0;
 }
 
-int write_jpeg_file(const std::string& fileName, int width, int height, int pixel_channels, int pixel_bit_depth,
+int write_jpeg_file(const std::string& fileName, int width, int height, int stride, int pixel_channels, int pixel_bit_depth,
                     std::function<std::span<uint8_t>()> image_data, int quality) {
     if ((pixel_channels != 3 && pixel_channels != 1) || pixel_bit_depth != 8) {
         throw std::runtime_error("Can only create JPEG files for 8-bit RGB or Grayscale images");
@@ -121,13 +121,12 @@ int write_jpeg_file(const std::string& fileName, int width, int height, int pixe
     // to ensure ::jpeg_destroy_compress() gets called even if
     // we throw out of this function.
     auto dt = [](::jpeg_compress_struct* cs) { ::jpeg_destroy_compress(cs); };
-    std::unique_ptr<::jpeg_compress_struct, decltype(dt)> compressInfo(new ::jpeg_compress_struct,
-                                                                       dt);
+    std::unique_ptr<::jpeg_compress_struct, decltype(dt)> compressInfo(new ::jpeg_compress_struct, dt);
     ::jpeg_create_compress(compressInfo.get());
     ::jpeg_stdio_dest(compressInfo.get(), outfile);
-    compressInfo->image_width = (JDIMENSION)width;
-    compressInfo->image_height = (JDIMENSION)height;
-    compressInfo->input_components = (JDIMENSION)pixel_channels;
+    compressInfo->image_width = (JDIMENSION) width;
+    compressInfo->image_height = (JDIMENSION) height;
+    compressInfo->input_components = (JDIMENSION) pixel_channels;
     compressInfo->in_color_space = static_cast<::J_COLOR_SPACE>(pixel_channels == 3 ? ::JCS_RGB : ::JCS_GRAYSCALE);
     compressInfo->err = ::jpeg_std_error(errorMgr.get());
     ::jpeg_set_defaults(compressInfo.get());
@@ -135,7 +134,7 @@ int write_jpeg_file(const std::string& fileName, int width, int height, int pixe
     ::jpeg_start_compress(compressInfo.get(), TRUE);
 
     uint8_t* ptr = image_data().data();
-    size_t row_stride = width * pixel_channels;
+    size_t row_stride = stride * pixel_channels;
 
     for (int line = 0; line < height; line++) {
         ::jpeg_write_scanlines(compressInfo.get(), &ptr, 1);

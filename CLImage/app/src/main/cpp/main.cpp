@@ -15,13 +15,44 @@
  ******************************************************************************/
 
 #include <cstdio>
+#include <string>
 
-#include "gls_image.hpp"
+#include "gls_cl.hpp"
+#include "gls_logging.h"
+#include "gls_cl_image.hpp"
+
+#include "cl_pipeline.h"
+
+static const char* TAG = "CLImage Test";
 
 int main(int argc, const char* argv[]) {
     printf("Hello CLImage!\n");
 
     if (argc > 1) {
-        auto image = gls::image<gls::rgb_pixel>::read_jpeg_file(argv[1]);
+        // Initialize the OpenCL environment and get the context
+        cl::Context context = gls::getContext();
+
+        // Read the input file into an image object
+        auto inputImage = gls::image<gls::rgba_pixel>::read_png_file(argv[1]);
+
+        LOG_INFO(TAG) << "inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
+
+        // Load image data in OpenCL image texture
+        gls::cl_image_2d<gls::rgba_pixel> clInputImage(context, *inputImage);
+
+        // Output Image from OpenCL processing
+        gls::cl_image_2d<gls::rgba_pixel> clOutputImage(context, clInputImage.width, clInputImage.height);
+
+        // Execute OpenCL Blur algorithm
+        if (blur(clInputImage, &clOutputImage) == 0) {
+            LOG_INFO(TAG) << "All done with Blur" << std::endl;
+        } else {
+            LOG_ERROR(TAG) << "Something wrong with the Blur." << std::endl;
+        }
+
+        // Use OpenCL's memory mapping for zero-copy image Output
+        auto outputImage = clOutputImage.mapImage();
+        outputImage.write_png_file("output.png");
+        clOutputImage.unmapImage(outputImage);
     }
 }

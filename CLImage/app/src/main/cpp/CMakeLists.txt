@@ -33,6 +33,7 @@ add_library( # Sets the name of the library.
         climage/gls_logging.cpp
         climage/gls_cl.cpp
         climage/gls_android_support.cpp
+        cl_pipeline.cpp
         climage-test.cpp)
 
 # Add header files for opencl
@@ -67,8 +68,13 @@ target_link_libraries( # Specifies the target library.
 
 add_executable(
         CLImageTest
-        climage/gls_image.hpp
+        climage/gls_image_png.cpp
         climage/gls_image_jpeg.cpp
+        climage/gls_icd_wrapper.cpp
+        climage/gls_cl_error.cpp
+        climage/gls_logging.cpp
+        climage/gls_cl.cpp
+        cl_pipeline.cpp
         main.cpp
 )
 

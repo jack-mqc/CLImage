@@ -23,24 +23,9 @@
 #include "gls_logging.h"
 #include "gls_cl_image.hpp"
 
+#include "cl_pipeline.h"
+
 static const char* TAG = "CLImage Test";
-
-int blur(const gls::cl_image_2d<gls::rgba_pixel>& input, gls::cl_image_2d<gls::rgba_pixel>* output) {
-    try {
-        const auto blurProgram = gls::loadOpenCLProgram("blur");
-
-        auto blurKernel = cl::KernelFunctor<cl::Image2D,  // input
-                                            cl::Image2D   // output
-                                            >(*blurProgram, "blur");
-
-        blurKernel(gls::buildEnqueueArgs(output->width, output->height), input.getImage2D(), output->getImage2D());
-        return 0;
-    } catch (cl::Error& err) {
-        LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what()) << " - " << gls::clStatusToString(err.err())
-                       << std::endl;
-        return -1;
-    }
-}
 
 extern "C" JNIEXPORT jint JNICALL
 Java_com_glassimaging_climage_TestCLImage_testCLImage(
@@ -53,36 +38,43 @@ Java_com_glassimaging_climage_TestCLImage_testCLImage(
     gls::AndroidBitmap input(env, inputBitmap);
     gls::AndroidBitmap output(env, outputBitmap);
 
-    // Initialize OpenCL
+    // Initialize the OpenCL environment and get the context
     cl::Context context = gls::getContext();
 
-    // Load OpenCL Shader resources
+    // Load OpenCL Shaders stored in App's assets
     gls::loadOpenCLShaders(env, assetManager, gls::getShadersMap());
 
-    // Load and bind OpenCL library
     try {
-        // Input Image
-        gls::cl_image_2d<gls::rgba_pixel>::unique_ptr inputImage;
+        // Input Image for OpenCL processing
+        gls::cl_image_2d<gls::rgba_pixel>::unique_ptr clInputImage;
         {
-            gls::image<gls::rgba_pixel> inputCPU(input.info().width, input.info().height,
-                                                 input.lockPixels<gls::rgba_pixel>());
-            inputImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel>>(context, inputCPU);
+            // Input image wrapped around the Android Bitmap
+            gls::image<gls::rgba_pixel> inputImage(input.info().width, input.info().height,
+                                                    input.lockPixels<gls::rgba_pixel>());
+            // Move data from the Input Bitmap to the OpenCL Image
+            clInputImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel>>(context, inputImage);
+
+            // Release Bitmap Object
             input.unLockPixels();
         }
 
-        gls::cl_image_2d<gls::rgba_pixel> outputImage(context, inputImage->width, inputImage->height);
+        // Output Image from OpenCL processing
+        gls::cl_image_2d<gls::rgba_pixel> clOutputImage(context, clInputImage->width, clInputImage->height);
 
-        if (blur(*inputImage, &outputImage) == 0) {
-            LOG_INFO(TAG) << "Blur went fine" << std::endl;
+        // Execute OpenCL Blur algorithm
+        if (blur(*clInputImage, &clOutputImage) == 0) {
+            LOG_INFO(TAG) << "All done with Blur" << std::endl;
+        } else {
+            LOG_ERROR(TAG) << "Something wrong with the Blur." << std::endl;
         }
 
-        gls::image<gls::rgba_pixel> outputImageCPU(outputImage.width, outputImage.height, output.lockPixels<gls::rgba_pixel>());
+        // Output image wrapped around the Android Bitmap
+        gls::image<gls::rgba_pixel> outputImage(clOutputImage.width, clOutputImage.height, output.lockPixels<gls::rgba_pixel>());
 
-        for (auto& p : outputImageCPU.pixels()) {
-            p = gls::rgba_pixel(0, 255, 0, 255);
-        }
+        // Wait for GPU to complete execution and move data to the output Bitmap
+        clOutputImage.copyPixelsTo(&outputImage);
 
-        outputImage.copyPixelsTo(&outputImageCPU);
+        // Release Bitmap object
         output.unLockPixels();
 
         return 0;

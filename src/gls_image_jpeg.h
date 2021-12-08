@@ -26,7 +26,7 @@ namespace gls {
 int read_jpeg_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
                    std::function<std::span<uint8_t>(int width, int height)> image_allocator);
 
-int write_jpeg_file(const std::string& fileName, int width, int height, int pixel_channels, int pixel_bit_depth,
+int write_jpeg_file(const std::string& fileName, int width, int height, int stride, int pixel_channels, int pixel_bit_depth,
                     std::function<std::span<uint8_t>()> image_data, int quality);
 
 }

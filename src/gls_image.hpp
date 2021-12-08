@@ -157,6 +157,7 @@ class basic_image {
    public:
     const int width;
     const int height;
+    const int stride;
 
     static const constexpr int pixel_bit_depth = T::bit_depth;
     static const constexpr int pixel_channels = T::channels;
@@ -164,7 +165,9 @@ class basic_image {
 
     typedef std::unique_ptr<basic_image<T>> unique_ptr;
 
-    basic_image(int _width, int _height) : width(_width), height(_height) {}
+    basic_image(int _width, int _height) : width(_width), height(_height), stride(_width) {}
+
+    basic_image(int _width, int _height, int _stride) : width(_width), height(_height), stride(_stride) {}
 };
 
 template <typename T>
@@ -184,7 +187,14 @@ class image : public basic_image<T> {
         assert(_width * _height <= _data.size());
     }
 
-   public:
+    image(int _width, int _height, int _stride, std::unique_ptr<std::vector<T>> data_store)
+            : basic_image<T>(_width, _height, _stride),
+              _data_store(std::move(data_store)),
+              _data(_data_store->data(), _data_store->size()) {
+        assert(_stride * _height <= _data.size());
+    }
+
+public:
     // Data is owned by the image and retained by _data_store
     image(int _width, int _height)
         : basic_image<T>(_width, _height),
@@ -192,14 +202,16 @@ class image : public basic_image<T> {
           _data(_data_store->data(), _data_store->size()) {}
 
     // Data is owned by caller, the image is only a wrapper around it
-    image(int _width, int _height, std::span<T> data) : basic_image<T>(_width, _height), _data(data) {
-        assert(_width * _height <= data.size());
+    image(int _width, int _height, int _stride, std::span<T> data) : basic_image<T>(_width, _height, _stride), _data(data) {
+        assert(_stride * _height <= data.size());
     }
 
-    // row access
-    T* operator[](int row) { return &_data[basic_image<T>::width * row]; }
+    image(int _width, int _height, std::span<T> data) : image<T>(_width, _height, _width, data) { }
 
-    const T* operator[](int row) const { return &_data[basic_image<T>::width * row]; }
+    // row access
+    T* operator[](int row) { return &_data[basic_image<T>::stride * row]; }
+
+    const T* operator[](int row) const { return &_data[basic_image<T>::stride * row]; }
 
     const std::span<T> pixels() const { return _data; }
 
@@ -251,74 +263,7 @@ class image : public basic_image<T> {
         auto image_data = [this]() -> std::span<uint8_t> {
             return std::span<uint8_t>((uint8_t*)this->_data.data(), sizeof(T) * this->_data.size());
         };
-        return gls::write_jpeg_file(filename, basic_image<T>::width, basic_image<T>::height, T::channels, T::bit_depth, image_data, quality);
-    }
-};
-
-template <typename T>
-class image_3d : public image<T> {
-   public:
-    const int depth;
-
-    typedef std::unique_ptr<image_3d<T>> unique_ptr;
-
-    // Data is owned by the image and retained by _data_store
-    image_3d(int _width, int _height, int _depth)
-        : image<T>(_width, _height, std::make_unique<std::vector<T>>(_width * _height * _depth)), depth(_depth) {
-        assert(image<T>::width * image<T>::height * depth == image<T>::data.size());
-    }
-
-    // Data is owned by caller, the image is only a wrapper around it
-    image_3d(int _width, int _height, int _depth, std::span<T> data)
-        : image<T>::width(_width), image<T>::height(_height), image<T>::_data(data), depth(_depth) {
-        assert(image<T>::width * image<T>::height * depth == image<T>::data.size());
-    }
-
-    // plane access
-    image<T> operator[](int plane) {
-        return image<T>(
-            image<T>::width, image<T>::height,
-            std::span(image<T>::_data[image<T>::width * image<T>::height * plane], image<T>::width * image<T>::height));
-    }
-
-    const image<T> operator[](int plane) const {
-        return image<T>(
-            image<T>::width, image<T>::height,
-            std::span(image<T>::_data[image<T>::width * image<T>::height * plane], image<T>::width * image<T>::height));
-    }
-
-    // image factory from PNG file
-    static unique_ptr read_png_file(const std::string& filename, int planes) {
-        unique_ptr result = nullptr;
-        std::unique_ptr<image<T>> image_2d = nullptr;
-
-        auto image_allocator = [&result, &image_2d, planes](int width, int height,
-                                                            std::vector<uint8_t*>* row_pointers) -> bool {
-            if (height % planes != 0) {
-                // We should fail harder here...
-                return false;
-            }
-            if ((result = std::make_unique<gls::image_3d<T>>(width, height / planes, planes)) == nullptr) {
-                return false;
-            }
-            if ((image_2d = std::make_unique<gls::image<T>>(width, height, result->pixels())) == nullptr) {
-                return false;
-            }
-            for (int i = 0; i < height; ++i) {
-                (*row_pointers)[i] = (uint8_t*)(*image_2d)[i];
-            }
-            return true;
-        };
-
-        gls::read_png_file(filename, T::channels, T::bit_depth, image_allocator);
-
-        return result;
-    }
-
-    // Write image to PNG file
-    int write_png_file(const std::string& filename) const {
-        image<T> image_2d(image<T>::width, image<T>::height * depth, image<T>::pixels());
-        return image_2d.write_png_file(filename);
+        return gls::write_jpeg_file(filename, basic_image<T>::width, basic_image<T>::height, basic_image<T>::stride,T::channels, T::bit_depth, image_data, quality);
     }
 };
 
