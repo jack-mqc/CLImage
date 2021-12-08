@@ -17,13 +17,17 @@ class TestCLImage : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Load test image from assets
         val baboonBitmap = this.assets.open(baboonPath).use { BitmapFactory.decodeStream(it) }
 
+        // Allocate output result
         val outputBitmap =
             Bitmap.createBitmap(baboonBitmap.width, baboonBitmap.height, Bitmap.Config.ARGB_8888)
 
+        // Process input image to generate output
         testCLImage(this.assets, baboonBitmap, outputBitmap)
 
+        // Display output image on screen
         binding.imageView.setImageBitmap(outputBitmap)
     }
 

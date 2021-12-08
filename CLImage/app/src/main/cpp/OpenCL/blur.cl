@@ -16,6 +16,8 @@
 
 const sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
 
+float3 boxBlur(image2d_t blurMap, int2 imageCoordinates);
+
 float3 boxBlur(image2d_t blurMap, int2 imageCoordinates) {
     const int filterSize = 15;
     float3 blur = 0;

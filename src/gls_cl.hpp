@@ -27,6 +27,7 @@
 #include <OpenCL/cl_ext.h>
 
 #include "CL/opencl.hpp"
+
 #elif __ANDROID__
 
 #include <map>

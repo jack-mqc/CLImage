@@ -94,7 +94,7 @@ class cl_image_2d : public cl_image<T> {
 
         size_t stride = row_pitch / image<T>::pixel_size;
         size_t data_size = stride * image<T>::height;
-        return gls::image(image<T>::width, image<T>::height, stride, std::span<T>(image_data, data_size));
+        return gls::image(image<T>::width, image<T>::height, (int) stride, std::span<T>(image_data, data_size));
     }
 
     void unmapImage(const image<T>& mappedImage) { cl::enqueueUnmapMemObject(_payload->image, (void*)mappedImage[0]); }
