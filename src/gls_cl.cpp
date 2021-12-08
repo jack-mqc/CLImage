@@ -2,6 +2,10 @@
 // Created by Fabio Riccardi on 12/7/21.
 //
 
+#include <fstream>
+#include <iostream>
+#include <map>
+
 #include "gls_cl.hpp"
 #include "gls_logging.h"
 
@@ -93,5 +97,171 @@ cl::Context getContext() {
         return cl::Context::getDefault();
 }
 #endif
+
+#if defined(__ANDROID__) && !defined(COMMAND_LINE_TOOL)
+static std::map<std::string, std::string> cl_shaders;
+static std::map<std::string, std::vector<unsigned char>> cl_bytecode;
+
+std::map<std::string, std::string>* getShadersMap() { return &cl_shaders; }
+
+std::map<std::string, std::vector<unsigned char>>* getBytecodeMap() { return &cl_bytecode; }
+#endif
+
+std::string OpenCLSource(std::string shaderName) {
+#if defined(__ANDROID__) && !defined(COMMAND_LINE_TOOL)
+    return cl_shaders[shaderName];
+#else
+    std::ifstream file("OpenCL/" + shaderName, std::ios::in | std::ios::ate);
+    if (file.is_open()) {
+        std::streampos size = file.tellg();
+        std::vector<char> memblock((int)size);
+        file.seekg(0, std::ios::beg);
+        file.read(memblock.data(), size);
+        file.close();
+        return std::string(memblock.data(), memblock.data() + size);
+    }
+    return "";
+#endif
+}
+
+std::vector<unsigned char> OpenCLBinary(std::string shaderName) {
+#if defined(__ANDROID__) && !defined(COMMAND_LINE_TOOL)
+    return cl_bytecode[shaderName];
+#else
+    std::ifstream file("OpenCLBinaries/" + shaderName, std::ios::in | std::ios::binary | std::ios::ate);
+    if (file.is_open()) {
+        std::streampos size = file.tellg();
+        std::vector<unsigned char> memblock((int)size);
+        file.seekg(0, std::ios::beg);
+        file.read((char*)memblock.data(), size);
+        file.close();
+        return memblock;
+    }
+    return std::vector<unsigned char>();
+#endif
+}
+
+int SaveBinaryFile(std::string path, const std::vector<unsigned char>& binary) {
+    std::ofstream file(path, std::ios::out | std::ios::binary | std::ios::trunc);
+    if (file.is_open()) {
+        file.write((char*)binary.data(), binary.size());
+        file.close();
+        LOG_INFO(TAG) << "Wrote " << binary.size() << " bytes to " << path << std::endl;
+        return 0;
+    }
+    LOG_ERROR(TAG) << "Couldn't open file " << path << std::endl;
+    return -1;
+}
+
+int SaveOpenCLBinary(std::string shaderName, const std::vector<unsigned char>& binary) {
+    return SaveBinaryFile("OpenCL/" + shaderName, binary);
+}
+
+void handleProgramException(const cl::BuildError& e) {
+    LOG_ERROR(TAG) << "OpenCL Build Error - " << e.what() << ": " << clStatusToString(e.err()) << std::endl;
+    // Print build info for all devices
+    for (auto& pair : e.getBuildLog()) {
+        LOG_ERROR(TAG) << pair.second << std::endl;
+    }
+}
+
+#ifdef __APPLE__
+static const char* cl_options = "-cl-std=CL1.2 -Werror -cl-fast-relaxed-math";
+#else
+static const char* cl_options = "-cl-std=CL2.0 -Werror -cl-fast-relaxed-math";
+#endif
+
+static std::map<std::string, cl::Program*> cl_programs;
+
+cl::Program* loadOpenCLProgram(const std::string& programName) {
+    cl::Program* program = cl_programs[programName];
+    if (program) {
+        return program;
+    }
+
+    try {
+        cl::Context context = getContext();
+        cl::Device device = cl::Device::getDefault();
+
+#if (defined(__ANDROID__) && defined(NDEBUG)) || (defined(__APPLE__) && !defined(TARGET_CPU_ARM64) && !defined(DEBUG))
+        std::vector<unsigned char> binary = OpenCLBinary(programName + ".o");
+
+        if (!binary.empty()) {
+            program = new cl::Program(context, {device}, {binary});
+        } else
+#endif
+        {
+            program = new cl::Program(OpenCLSource(programName + ".cl"));
+        }
+        program->build(device, cl_options);
+        cl_programs[programName] = program;
+        return program;
+    } catch (const cl::BuildError& e) {
+        handleProgramException(e);
+        return nullptr;
+    }
+}
+
+int buildProgram(cl::Program& program) {
+    try {
+        program.build(cl_options);
+        for (auto& pair : program.getBuildInfo<CL_PROGRAM_BUILD_LOG>()) {
+            if (!pair.second.empty()) {
+                LOG_INFO(TAG) << "OpenCL Build: " << pair.second << std::endl;
+            }
+        }
+    } catch (const cl::BuildError& e) {
+        handleProgramException(e);
+        return -1;
+    }
+    return 0;
+}
+
+// Compute a list of divisors in the range [1..32]
+std::vector<int> computeDivisors(const size_t val) {
+    std::vector<int> divisors;
+    int divisor = 32;
+    while (divisor >= 1) {
+        if (val % divisor == 0) {
+            divisors.push_back(divisor);
+        }
+        divisor /= 2;
+    }
+    return divisors;
+}
+
+// Compute the squarest workgroup of size <= max_workgroup_size
+cl::NDRange computeWorkGroupSizes(size_t width, size_t height) {
+    std::vector<int> width_divisors = computeDivisors(width);
+    std::vector<int> height_divisors = computeDivisors(height);
+
+    cl::Device d = cl::Device::getDefault();
+    const size_t max_workgroup_size = d.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
+
+    int width_divisor = 1;
+    int height_divisor = 1;
+    while (width_divisor * height_divisor <= max_workgroup_size &&
+           (!width_divisors.empty() || !height_divisors.empty())) {
+        if (!width_divisors.empty()) {
+            int new_width_divisor = width_divisors.back();
+            width_divisors.pop_back();
+            if (new_width_divisor * height_divisor > max_workgroup_size) {
+                break;
+            } else {
+                width_divisor = new_width_divisor;
+            }
+        }
+        if (!height_divisors.empty()) {
+            int new_height_divisor = height_divisors.back();
+            height_divisors.pop_back();
+            if (new_height_divisor * width_divisor > max_workgroup_size) {
+                break;
+            } else {
+                height_divisor = new_height_divisor;
+            }
+        }
+    }
+    return cl::NDRange(width_divisor, height_divisor);
+}
 
 }  // namespace gls

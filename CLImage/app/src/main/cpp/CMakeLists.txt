@@ -32,6 +32,7 @@ add_library( # Sets the name of the library.
         climage/gls_cl_error.cpp
         climage/gls_logging.cpp
         climage/gls_cl.cpp
+        climage/android_support.cpp
         climage-test.cpp)
 
 # Add header files for opencl
@@ -60,7 +61,9 @@ target_link_libraries( # Specifies the target library.
 
         # Links the target library to the log library
         # included in the NDK.
-        ${log-lib})
+        ${log-lib}
+        -ljnigraphics
+        -landroid)
 
 add_executable(
         CLImageTest
@@ -74,8 +77,7 @@ target_link_libraries( # Specifies the target library.
         libjpg
         libpng
         libz
-        ${log-lib}
-        )
+        ${log-lib})
 
 target_compile_options( CLImageTest PRIVATE -Wall -Werror -DUSE_IOSTREAM_LOG -DCOMMAND_LINE_TOOL )
 

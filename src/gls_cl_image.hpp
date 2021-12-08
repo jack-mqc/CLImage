@@ -18,7 +18,6 @@
 #define CL_IMAGE_H
 
 #include "gls_cl.hpp"
-#include "cl_support.h"
 #include "gls_image.hpp"
 
 namespace gls {
@@ -126,7 +125,7 @@ class cl_image_buffer_2d : public cl_image_2d<T> {
         return std::make_unique<payload>(payload{{image}, buffer});
     }
 
-    override image<T> mapImage() {
+    image<T> mapImage() override {
         size_t pixel_count = image<T>::width * image<T>::height;
         T* image_data =
             cl::enqueueMapBuffer(getBuffer(), true, CL_MAP_READ | CL_MAP_WRITE, 0, image<T>::pixel_size * pixel_count);

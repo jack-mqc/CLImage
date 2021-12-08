@@ -17,27 +17,93 @@
 #include <jni.h>
 #include <string>
 
-#include "gls_cl.hpp"
+#include "android_support.h"
 
+#include "gls_cl.hpp"
 #include "gls_logging.h"
+#include "gls_cl_image.hpp"
 
 static const char* TAG = "CLImage Test";
 
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_glassimaging_climage_TestCLImage_testCLImage(
-        JNIEnv* env,
-        jobject /* this */) {
+int blur(const gls::cl_image_2d<gls::rgba_pixel>& input, gls::cl_image_2d<gls::rgba_pixel>* output) {
+    try {
+        const auto blurProgram = gls::loadOpenCLProgram("blur");
 
-    // Load and bind OpenCL library
+        auto blurKernel = cl::KernelFunctor<cl::Image2D,  // input
+                                            cl::Image2D   // output
+                                            >(*blurProgram, "blur");
+
+        blurKernel(gls::buildEnqueueArgs(output->width, output->height), input.getImage2D(), output->getImage2D());
+        return 0;
+    } catch (cl::Error& err) {
+        LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what()) << " - " << gls::clStatusToString(err.err())
+                       << std::endl;
+        return -1;
+    }
+}
+
+int initializeOpenCL() {
     try {
         cl::Context context = gls::getContext();
         cl::Context::setDefault(context);
-        return nullptr;
+        return 0;
+    } catch (cl::Error& err) {
+        LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what()) << " - " << gls::clStatusToString(err.err())
+                       << std::endl;
+        return -1;
+    }
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_glassimaging_climage_TestCLImage_testCLImage(
+        JNIEnv* env,
+        jobject /* this */,
+        jobject assetManager,
+        jobject inputBitmap,
+        jobject outputBitmap) {
+
+    // Load and bind OpenCL library
+    initializeOpenCL();
+
+    // Load OpenCL Shader resources
+    loadOpenCLShaders(env, assetManager, gls::getShadersMap());
+
+    // Bind input and output Bitmaps
+    AndroidBitmap input(env, inputBitmap);
+    AndroidBitmap output(env, outputBitmap);
+
+    // Load and bind OpenCL library
+    try {
+        const auto context = gls::getContext();
+
+        // Input Image
+        gls::cl_image_2d<gls::rgba_pixel>::unique_ptr inputImage;
+        {
+            gls::image<gls::rgba_pixel> inputCPU(input.info().width, input.info().height,
+                                                 input.lockPixels<gls::rgba_pixel>());
+            inputImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel>>(context, inputCPU);
+            input.unLockPixels();
+        }
+
+        gls::cl_image_2d<gls::rgba_pixel> outputImage(context, inputImage->width, inputImage->height);
+
+        if (blur(*inputImage, &outputImage) == 0) {
+            LOG_INFO(TAG) << "Blur went fine" << std::endl;
+        }
+
+        gls::image<gls::rgba_pixel> outputImageCPU(outputImage.width, outputImage.height, output.lockPixels<gls::rgba_pixel>());
+
+        for (auto& p : outputImageCPU.pixels()) {
+            p = gls::rgba_pixel(0, 255, 0, 255);
+        }
+
+        outputImage.copyPixelsTo(&outputImageCPU);
+        output.unLockPixels();
+
+        return 0;
     } catch (cl::Error& err) {
         LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what())
                        << " - " << gls::clStatusToString(err.err()) << std::endl;
+        return -1;
     }
-
-    std::string hello = "Hello from C++";
-    return env->NewStringUTF(hello.c_str());
 }

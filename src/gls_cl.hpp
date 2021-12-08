@@ -28,6 +28,7 @@
 
 #include "CL/opencl.hpp"
 #elif __ANDROID__
+
 #include <map>
 
 #define CL_TARGET_OPENCL_VERSION 200
@@ -39,11 +40,44 @@
 #include <CL/cl_ext.h>
 
 #include <CL/opencl.hpp>
+
 #endif
 
 namespace gls {
-    cl::Context getContext();
 
-    std::string clStatusToString(cl_int status);
+cl::Context getContext();
+
+std::string OpenCLSource(std::string shaderName);
+
+std::vector<unsigned char> OpenCLBinary(std::string shaderName);
+
+int SaveBinaryFile(std::string path, const std::vector<unsigned char> &binary);
+
+int SaveOpenCLBinary(std::string shaderName, const std::vector<unsigned char> &binary);
+
+cl::Program *loadOpenCLProgram(const std::string &programName);
+
+int buildProgram(cl::Program &program);
+
+void handleProgramException(const cl::BuildError &e);
+
+cl::NDRange computeWorkGroupSizes(size_t width, size_t height);
+
+#ifdef __ANDROID__
+
+std::map<std::string, std::string> *getShadersMap();
+
+std::map<std::string, std::vector<unsigned char>> *getBytecodeMap();
+
+#endif
+
+inline static cl::EnqueueArgs buildEnqueueArgs(size_t width, size_t height) {
+    cl::NDRange global_workgroup_size = cl::NDRange(width, height);
+    cl::NDRange local_workgroup_size = computeWorkGroupSizes(width, height);
+    return cl::EnqueueArgs(global_workgroup_size, local_workgroup_size);
+}
+
+std::string clStatusToString(cl_int status);
+
 }  // namespace gls
 #endif /* GLS_CL_HPP */

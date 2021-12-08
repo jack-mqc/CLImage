@@ -27,6 +27,24 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
+    sourceSets {
+        // Use compiled shaders for the release build
+        release {
+            assets.srcDirs = [
+                    "$projectDir.absolutePath/src/main/assets",
+                    "$project.rootDir/app/build/OpenCLBinaries"
+            ]
+        }
+        // Use OpenCL source shaders for the debug build
+        debug {
+            assets.srcDirs = [
+                    "$projectDir.absolutePath/src/main/assets",
+                    "$projectDir.absolutePath/src/main/cpp/OpenCL"
+            ]
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
