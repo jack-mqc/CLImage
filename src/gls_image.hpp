@@ -157,7 +157,6 @@ class basic_image {
    public:
     const int width;
     const int height;
-    const int stride;
 
     static const constexpr int pixel_bit_depth = T::bit_depth;
     static const constexpr int pixel_channels = T::channels;
@@ -165,53 +164,40 @@ class basic_image {
 
     typedef std::unique_ptr<basic_image<T>> unique_ptr;
 
-    basic_image(int _width, int _height) : width(_width), height(_height), stride(_width) {}
-
-    basic_image(int _width, int _height, int _stride) : width(_width), height(_height), stride(_stride) {}
+    basic_image(int _width, int _height) : width(_width), height(_height) {}
 };
 
 template <typename T>
 class image : public basic_image<T> {
    public:
+    const int stride;
     typedef std::unique_ptr<image<T>> unique_ptr;
 
    protected:
     const std::unique_ptr<std::vector<T>> _data_store = nullptr;
     const std::span<T> _data;
 
-    // Data is owned by caller, the image is only a wrapper around it
-    image(int _width, int _height, std::unique_ptr<std::vector<T>> data_store)
-        : basic_image<T>(_width, _height),
-          _data_store(std::move(data_store)),
-          _data(_data_store->data(), _data_store->size()) {
-        assert(_width * _height <= _data.size());
-    }
-
-    image(int _width, int _height, int _stride, std::unique_ptr<std::vector<T>> data_store)
-            : basic_image<T>(_width, _height, _stride),
-              _data_store(std::move(data_store)),
-              _data(_data_store->data(), _data_store->size()) {
-        assert(_stride * _height <= _data.size());
-    }
-
 public:
     // Data is owned by the image and retained by _data_store
-    image(int _width, int _height)
-        : basic_image<T>(_width, _height),
-          _data_store(std::make_unique<std::vector<T>>(_width * _height)),
+    image(int _width, int _height, int _stride)
+        : basic_image<T>(_width, _height), stride(_stride),
+          _data_store(std::make_unique<std::vector<T>>(_stride * _height)),
           _data(_data_store->data(), _data_store->size()) {}
 
+    image(int _width, int _height) : image(_width, _height, _width) {}
+
     // Data is owned by caller, the image is only a wrapper around it
-    image(int _width, int _height, int _stride, std::span<T> data) : basic_image<T>(_width, _height, _stride), _data(data) {
+    image(int _width, int _height, int _stride, std::span<T> data)
+        : basic_image<T>(_width, _height), stride(_stride), _data(data) {
         assert(_stride * _height <= data.size());
     }
 
     image(int _width, int _height, std::span<T> data) : image<T>(_width, _height, _width, data) { }
 
     // row access
-    T* operator[](int row) { return &_data[basic_image<T>::stride * row]; }
+    T* operator[](int row) { return &_data[stride * row]; }
 
-    const T* operator[](int row) const { return &_data[basic_image<T>::stride * row]; }
+    const T* operator[](int row) const { return &_data[stride * row]; }
 
     const std::span<T> pixels() const { return _data; }
 
@@ -263,7 +249,7 @@ public:
         auto image_data = [this]() -> std::span<uint8_t> {
             return std::span<uint8_t>((uint8_t*)this->_data.data(), sizeof(T) * this->_data.size());
         };
-        return gls::write_jpeg_file(filename, basic_image<T>::width, basic_image<T>::height, basic_image<T>::stride,T::channels, T::bit_depth, image_data, quality);
+        return gls::write_jpeg_file(filename, basic_image<T>::width, basic_image<T>::height, stride, T::channels, T::bit_depth, image_data, quality);
     }
 };
 

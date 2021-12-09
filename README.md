@@ -117,7 +117,7 @@ gls::image objects efficiently represent 2D images in memory. The following exam
 
 We can see that gls::image objects have a **width** and a **height** and can be accessed using array subscript **[ ]** operators as 2D matrices. The first subscript (`input[y]`) returns a row of the image, the second allows to access individual pixels (`input[y][x]`).
 
-Pixels are strongly typed and several common basic types are predifined (in `cl_image.hpp`), pixel components are accessed with **red**, **green**, **blue** and **alpha**, or as a vector (e.g: `p.v[0]`).
+Pixels are strongly typed and several common basic types are predifined (in `cl_image.hpp`), pixel components are accessed with **red**, **green**, **blue** and **alpha**, or as a vector (e.g: `p[0]`).
 
 Image IO functionality is available for **PNG** and **JPEG** files. The following example shows how to save a single channel floating point image to a JPEG file:
 
