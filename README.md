@@ -1,9 +1,12 @@
 # CLImage
 ### A Modern Approach to using OpenCL with C++ on Android and Unix.
+**Fabio Riccardi  
+Glass Imaging, Inc.  
+<fabio@glass-imaging.com>**
 
 ## Introduction
 
-CLImage is a C++ API to seamlessly use **`OpenCL compute`** features for *GPGPU* applications, such as Computer Vision, designed to be used in conjunction with [opencl.hpp](https://github.com/KhronosGroup/OpenCL-CLHPP), it provides:
+**CLImage** is a C++ API to seamlessly use **OpenCL compute** for GPGPU and imaging applications, designed to be used in conjunction with **[opencl.hpp](https://github.com/KhronosGroup/OpenCL-CLHPP)**, it provides:
 
 * An Android bridge to link your application to the OpenCL libraries provided by the device's manufacturer.
 * A Simple and powerful set of C++ classes to represent and manipulate typed images in memory, on the GPU, and on the file system.
@@ -32,7 +35,7 @@ For Android I have included prebuilt versions of the libpng, libjpeg-turbo, and 
 
 ## An Example
 
-To understand this example some familiarity is expected with [OpenCL](https://github.com/KhronosGroup/OpenCL-Guide) and [opencl.hpp](https://github.com/KhronosGroup/OpenCL-CLHPP)
+To understand this example some familiarity is expected with **[Modern C++](https://docs.microsoft.com/en-us/cpp/cpp/welcome-back-to-cpp-modern-cpp)**, **[OpenCL](https://github.com/KhronosGroup/OpenCL-Guide)** and **[opencl.hpp](https://github.com/KhronosGroup/OpenCL-CLHPP)**.
 
 Two example projects are provided to demonstrate climage's use with Android Studio and Xcode. The Android project generates both a command line tool and an Android App, the Xcode project generates a command line tool for macOS.
 
@@ -42,7 +45,7 @@ Let's look at the `main.cc` file of the command line tool:
     auto inputImage = gls::image<gls::rgba_pixel>::read_png_file(filePath);
 ```
 
-reads a PNG image from the file system and returns a uinique_ptr to an in memory RGBA representation
+reads a PNG image from the file system and returns a `std::uinique_ptr` to an in memory RGBA representation
 of the image.
 
 A variety of image formats are available for the most common image layouts (Luma, LumaAlpha, RGB, RGBA)
@@ -55,13 +58,13 @@ To create an image that can be directly accessed by OpenCL we can use:
     gls::cl_image_2d<gls::rgba_pixel> clInputImage(context, *inputImage);
 ```
 
-Similarly to `gls::image`, `gls::cl_image_2d` will create an image-like object that acts as a wrapper to the OpenCL texture image, initialized with the geometry, data type and data content of inputImage. OpenCL image wrappers are available for CLImage2D, CLImage2DArray, CLImage3D and CLImage2D backed by CLBuffers, and they are defined in `gls_cl_image.hpp`.
+Similarly to `gls::image`, `gls::cl_image_2d` will create an image-like object that acts as a wrapper to the OpenCL texture image, initialized with the geometry, data type and data content of `inputImage`. OpenCL image wrappers are available for CLImage2D, CLImage2DArray, CLImage3D and CLImage2D backed by CLBuffers, and they are defined in `gls_cl_image.hpp`.
 
-All image objects are typed, making it possible to use the C++ type system to robustly interface between C++
-and OpenCL/opencl.hpp
+All image objects are *strongly typed*, making it possible to use the C++ type system to robustly interface between C++
+and **OpenCL/opencl.hpp**.
 
 To get the underlying OpenCL Image2D object, the getImage2D() accessor is provided. The following code fragmnent
-from `cl_pipeline.cpp` illustrates how to use the `gls::cl_image` types in conjunction with [opencl.hpp](https://github.com/KhronosGroup/OpenCL-CLHPP):
+from `cl_pipeline.cpp` illustrates how to use the `gls::cl_image` types in conjunction with **[opencl.hpp](https://github.com/KhronosGroup/OpenCL-CLHPP)**:
 
 ```c++
     int blur(const gls::cl_image_2d<gls::rgba_pixel>& input, gls::cl_image_2d<gls::rgba_pixel>* output) {
@@ -131,14 +134,13 @@ Image IO functionality is available for **PNG** and **JPEG** files. The followin
                 max = val.luma;
             }
         }
-
-        float multiplier = (minmax.max - minmax.min) > 0 ? 255 / (minmax.max - minmax.min) : 1;
+        float multiplier = (max - min) > 0 ? 255 / (max - min) : 1;
 
         // Create a single channel 8-bit image with values normalized in the range [0-255]
         gls::image<gls::luma_pixel> outputImage(image.width, image.height);
         for (int y = 0; y < outputImage.height; y++) {
             for (int x = 0; x < outputImage.width; x++) {
-                outputImage[y][x].luma = (int) (multiplier * (image[y][x].luma - minmax.min));
+                outputImage[y][x].luma = (int) (multiplier * (image[y][x].luma - min));
             }
         }
         // Save it as a JPEG file
