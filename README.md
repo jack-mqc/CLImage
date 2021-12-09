@@ -1,5 +1,5 @@
 # CLImage
-### A modern approach to using `OpenCL` with `C++` on Android and Unix based systems.
+### A Modern Approach to using OpenCL with C++ on Android and Unix.
 
 ## Introduction
 
@@ -21,6 +21,14 @@ CLImage provides a transpatent bridge to the OpenCL libraries installed by the d
 OpenCL applications need to create and manage opaque objects (CLImage, CLBuffer) that represent GPU data, and connect this data to the GPU shaders that manipulate them. Even with the help of libraties like opencl.hpp, managing OpenCL memory objects tends to be very error prone and a source of hard to debug issues.
 
 CLImage provides high level typed C++ wrapper objects that allow to tie the GPU memory objects with their omologous in the CPU memory space.
+
+## Requirements
+
+Reasonably recent versions **Android Studio** and **Xcode** are needed to build and run the examples, on macOS you will need to install **libpng**, **libjpeg** and **zlib** using **[homebrew](https://brew.sh)** to read and write JPEG and PNG files:
+
+    brew install libpng libjpeg zlib
+
+For Android I have included prebuilt versions of the libpng, libjpeg-turbo, and zlib, with their respective header files.
 
 ## An Example
 
