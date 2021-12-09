@@ -14,7 +14,6 @@
  * limitations under the License.
  ******************************************************************************/
 
-#include <cstdio>
 #include <string>
 
 #include "gls_cl.hpp"

@@ -26,7 +26,7 @@ int blur(const gls::cl_image_2d<gls::rgba_pixel>& input, gls::cl_image_2d<gls::r
         // Load the shader source
         const auto blurProgram = gls::loadOpenCLProgram("blur");
 
-        // Bind the kernel's parameters
+        // Bind the kernel parameters
         auto blurKernel = cl::KernelFunctor<cl::Image2D,  // input
                                             cl::Image2D   // output
                                             >(*blurProgram, "blur");
