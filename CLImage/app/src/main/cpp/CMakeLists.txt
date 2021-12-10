@@ -89,3 +89,18 @@ target_compile_options( CLImageTest PRIVATE -Wall -Werror -DUSE_IOSTREAM_LOG -DC
 
 target_include_directories( CLImageTest PRIVATE ${CMAKE_SOURCE_DIR}/headers )
 target_include_directories( CLImageTest PRIVATE ${CMAKE_SOURCE_DIR}/climage )
+
+add_executable(
+        ShaderCompiler
+        climage/gls_icd_wrapper.cpp
+        climage/gls_cl_error.cpp
+        climage/gls_logging.cpp
+        climage/gls_cl.cpp
+        climage/gls_android_support.cpp
+        ShaderCompiler.cpp
+)
+
+target_compile_options( ShaderCompiler PRIVATE -Wall -Werror -DUSE_IOSTREAM_LOG )
+
+target_include_directories( ShaderCompiler PRIVATE ${CMAKE_SOURCE_DIR}/headers )
+target_include_directories( ShaderCompiler PRIVATE ${CMAKE_SOURCE_DIR}/climage )

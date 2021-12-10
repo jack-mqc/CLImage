@@ -43,6 +43,7 @@ Java_com_glassimaging_climage_TestCLImage_testCLImage(
 
     // Load OpenCL Shaders stored in App's assets
     gls::loadOpenCLShaders(env, assetManager, gls::getShadersMap());
+    gls::loadOpenCLBytecode(env, assetManager, gls::getBytecodeMap());
 
     try {
         // Input Image for OpenCL processing
