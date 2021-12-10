@@ -44,6 +44,8 @@
 
 #endif
 
+#include "gls_exception.hpp"
+
 namespace gls {
 
 cl::Context getContext();

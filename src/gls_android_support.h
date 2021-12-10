@@ -21,18 +21,9 @@
 #include <map>
 #include <android/bitmap.h>
 
-#include <exception>
+#include "gls_exception.hpp"
 
 namespace gls {
-
-class exception : public std::exception {
-    const std::string _message;
-
-public:
-    explicit exception(std::string message) : _message(std::move(message)) {}
-
-    [[nodiscard]] const char *what() const noexcept override { return _message.c_str(); }
-};
 
 std::string toString(JNIEnv *env, jstring jStr);
 

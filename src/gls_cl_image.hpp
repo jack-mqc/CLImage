@@ -54,6 +54,8 @@ class cl_image_2d : public cl_image<T> {
         : cl_image<T>(other.width, other.height),
           _payload(buildPayload(context, other.width, other.height, other.pixels().data())) {}
 
+    virtual ~cl_image_2d() {}
+
     static inline std::unique_ptr<payload> buildPayload(cl::Context context, int width, int height, T* data = nullptr) {
         cl_mem_flags mem_flags = CL_MEM_READ_WRITE | (data ? CL_MEM_COPY_HOST_PTR : 0);
         return std::make_unique<payload>(payload{cl::Image2D(context, mem_flags, cl_image<T>::ImageFormat(), width,
