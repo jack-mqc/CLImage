@@ -6,7 +6,7 @@ Glass Imaging, Inc.
 
 ## Introduction
 
-**CLImage** is a C++ API to seamlessly use **OpenCL compute** for GPGPU and imaging applications, designed to be used in conjunction with **[opencl.hpp](https://github.com/KhronosGroup/OpenCL-CLHPP)**, it provides:
+**CLImage** is a C++ API to seamlessly use **OpenCL Compute** for GPGPU and imaging applications, designed to be used in conjunction with **[opencl.hpp](https://github.com/KhronosGroup/OpenCL-CLHPP)**, it provides:
 
 * An Android bridge to link your application to the OpenCL libraries provided by the device's manufacturer.
 * A Simple and powerful set of C++ classes to represent and manipulate typed images in memory, on the GPU, and on the file system.
@@ -15,11 +15,13 @@ Glass Imaging, Inc.
 
 OpenCL is a very powerful and mature GPU API, available on a variety of platforms, it allows for a very portable way to write high performance applications using GPU acceleration.
 
-On Android devices OpenCL is still the best way to get the best performance out of the GPU. The alternatives are OpenGL, which is quite ancient and clunky, and Vulkan, which could be great except that basic fundamental tools — such as the shader compiler — are still in their infancy and are quite unreliable.
+On Android devices OpenCL is still the best way to get the best performance out of the GPU. OpenCL is a mature solution with an excellent shading language and lots of advanced tools for control on numeric precision and performance.
+
+Alternatives are OpenGL, which is quite old and clunky, and Vulkan, which could be great except that basic fundamental tools — such as the shader compiler — are still in their infancy.
 
 One of the biggest hurdles to using OpenCL on Android devices is how to link your application to the libraries provided by the device manufacturer. To this day there seems to be no official way to do that.
 
-CLImage provides a transpatent bridge to the OpenCL libraries installed by the device manufacturer, allowing the use of powerful header based wrappers such as opencl.hpp
+CLImage provides a transparent bridge to the OpenCL libraries installed by the device manufacturer, allowing the use of powerful header based wrappers such as opencl.hpp
 
 OpenCL applications need to create and manage opaque objects (CLImage, CLBuffer) that represent GPU data, and connect this data to the GPU shaders that manipulate them. Even with the help of libraties like opencl.hpp, managing OpenCL memory objects tends to be very error prone and a source of hard to debug issues.
 
@@ -115,9 +117,11 @@ gls::image objects efficiently represent 2D images in memory. The following exam
     }
 ```
 
-We can see that gls::image objects have a **width** and a **height** and can be accessed using array subscript **[ ]** operators as 2D matrices. The first subscript (`input[y]`) returns a row of the image, the second allows to access individual pixels (`input[y][x]`).
+We can see that gls::image objects have a **width** and a **height** and can be accessed using array subscript **[ ]** operators as 2D matrices. The first subscript (`input[y]`) returns a row of the image, the second allows to access individual pixels (`input[y][x]`). Notice that in this code fragment `p` is a reference to a pixel value within the `input` image data store.
 
 Pixels are strongly typed and several common basic types are predifined (in `cl_image.hpp`), pixel components are accessed with **red**, **green**, **blue** and **alpha**, or as a vector (e.g: `p[0]`).
+
+`gls::image` objects are optimized for performance and minimal memory footprint, utilizing modern C++ features for object allocation and lifetime. `gls::image` objects can be allocated directly on the stack or through factory methods returning a `std::unique_ptr` to the object. 
 
 Image IO functionality is available for **PNG** and **JPEG** files. The following example shows how to save a single channel floating point image to a JPEG file:
 
