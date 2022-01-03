@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2021 Glass Imaging Inc.
+ * Copyright (c) 2021-2022 Glass Imaging Inc.
+ * Author: Fabio Riccardi <fabio@glass-imaging.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,7 @@
 
 #include <sys/types.h>
 
+#include <cassert>
 #include <functional>
 #include <memory>
 #include <span>
@@ -223,9 +225,11 @@ public:
     }
 
     // Write image to PNG file
-    int write_png_file(const std::string& filename) const {
+    // compression_level range: [0-9], 0 -> no compression (default), useful range: [3-6]
+    int write_png_file(const std::string& filename, int compression_level = 0) const {
         auto row_pointer = [this](int row) -> uint8_t* { return (uint8_t*)(*this)[row]; };
-        return gls::write_png_file(filename, basic_image<T>::width, basic_image<T>::height, T::channels, T::bit_depth, row_pointer);
+        return gls::write_png_file(filename, basic_image<T>::width, basic_image<T>::height, T::channels,
+                                   T::bit_depth, compression_level, row_pointer);
     }
 
     // image factory from JPEG file

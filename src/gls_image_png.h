@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2021 Glass Imaging Inc.
+ * Copyright (c) 2021-2022 Glass Imaging Inc.
+ * Author: Fabio Riccardi <fabio@glass-imaging.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +27,7 @@ namespace gls {
 int read_png_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
                   std::function<bool(int width, int height, std::vector<uint8_t*>* row_pointers)> image_allocator);
 
-int write_png_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
+int write_png_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth, int compression_level,
                    std::function<uint8_t* (int row)> row_pointer);
 
 }

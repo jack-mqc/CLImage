@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2021 Glass Imaging Inc.
+ * Copyright (c) 2021-2022 Glass Imaging Inc.
+ * Author: Fabio Riccardi <fabio@glass-imaging.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +28,7 @@ int read_jpeg_file(const std::string& filename, int pixel_channels, int pixel_bi
                    std::function<std::span<uint8_t>(int width, int height)> image_allocator);
 
 int write_jpeg_file(const std::string& fileName, int width, int height, int stride, int pixel_channels, int pixel_bit_depth,
-                    std::function<std::span<uint8_t>()> image_data, int quality);
+                    const std::function<std::span<uint8_t>()>& image_data, int quality);
 
 }
 #endif /* GLS_IMAGE_JPEG_HPP */

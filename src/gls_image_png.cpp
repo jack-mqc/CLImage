@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2021 Glass Imaging Inc.
+ * Copyright (c) 2021-2022 Glass Imaging Inc.
+ * Author: Fabio Riccardi <fabio@glass-imaging.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +18,7 @@
 #include "gls_image_png.h"
 
 #include <png.h>
+#include <zlib.h>
 
 namespace gls {
 
@@ -27,21 +29,20 @@ int read_png_file(const std::string& filename, int pixel_channels, int pixel_bit
         throw std::runtime_error("Could not open " + filename);
     }
 
-    png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
     if (!png_ptr) {
         return -1;
     }
     png_infop info_ptr = png_create_info_struct(png_ptr);
     if (!info_ptr) {
-        png_destroy_write_struct(&png_ptr, NULL);
+        png_destroy_write_struct(&png_ptr, nullptr);
         return -1;
     }
 
     if (setjmp(png_jmpbuf(png_ptr))) {
-        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
         fclose(fp);
         throw std::runtime_error("Error reading PNG file: " + filename);
-        return -1;
     }
 
     png_init_io(png_ptr, fp);
@@ -49,7 +50,7 @@ int read_png_file(const std::string& filename, int pixel_channels, int pixel_bit
 
     png_uint_32 png_width, png_height;
     int png_color_type, png_bit_depth;
-    png_get_IHDR(png_ptr, info_ptr, &png_width, &png_height, &png_bit_depth, &png_color_type, NULL, NULL, NULL);
+    png_get_IHDR(png_ptr, info_ptr, &png_width, &png_height, &png_bit_depth, &png_color_type, nullptr, nullptr, nullptr);
 
     // Match the image's data layout
     if ((pixel_channels == 4 && png_color_type == PNG_COLOR_TYPE_RGB) ||
@@ -83,27 +84,27 @@ int read_png_file(const std::string& filename, int pixel_channels, int pixel_bit
     if (image_allocator(png_width, png_height, &row_pointers)) {
         png_read_image(png_ptr, row_pointers.data());
     }
-    png_read_end(png_ptr, NULL);
+    png_read_end(png_ptr, nullptr);
 
-    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+    png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
     fclose(fp);
 
     return 0;
 }
 
-int write_png_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
+int write_png_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth, int compression_level,
                    std::function<uint8_t*(int row)> row_pointer) {
     FILE* fp = fopen(filename.c_str(), "wb");
     if (!fp) {
         throw std::runtime_error("Could not open " + filename);
     }
 
-    png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
     if (!png_ptr) return 4; /* out of memory */
 
     png_infop info_ptr = png_create_info_struct(png_ptr);
     if (!info_ptr) {
-        png_destroy_write_struct(&png_ptr, NULL);
+        png_destroy_write_struct(&png_ptr, nullptr);
         return 4; /* out of memory */
     }
 
@@ -111,7 +112,6 @@ int write_png_file(const std::string& filename, int width, int height, int pixel
         png_destroy_write_struct(&png_ptr, &info_ptr);
         fclose(fp);
         throw std::runtime_error("Error writing PNG file: " + filename);
-        return 2;
     }
 
     png_init_io(png_ptr, fp);
@@ -129,8 +129,16 @@ int write_png_file(const std::string& filename, int width, int height, int pixel
     png_set_IHDR(png_ptr, info_ptr, width, height, pixel_bit_depth, png_color_type, PNG_INTERLACE_NONE,
                  PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
 
-    // No compression
-    // png_set_compression_level(png_ptr, 0);
+    // Fast compression strategy with fast filtering.
+    // Save time: 10x faster on Android with ~10% worse compression
+    if (compression_level <= 1) {
+        png_set_filter(png_ptr, PNG_FILTER_TYPE_BASE, PNG_FAST_FILTERS);
+        png_set_compression_strategy(png_ptr, Z_RLE);
+    }
+    // Use larger zlib buffer for speed
+    png_set_compression_mem_level(png_ptr, 9);
+
+    png_set_compression_level(png_ptr, compression_level);
 
     png_write_info(png_ptr, info_ptr);
 
@@ -144,7 +152,7 @@ int write_png_file(const std::string& filename, int width, int height, int pixel
     }
     png_write_image(png_ptr, row_pointers.data());
 
-    png_write_end(png_ptr, NULL);
+    png_write_end(png_ptr, nullptr);
     png_destroy_write_struct(&png_ptr, &info_ptr);
     fclose(fp);
 

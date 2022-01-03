@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2021 Glass Imaging Inc.
+ * Copyright (c) 2021-2022 Glass Imaging Inc.
+ * Author: Fabio Riccardi <fabio@glass-imaging.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,15 +51,13 @@ namespace gls {
 
 cl::Context getContext();
 
-std::string OpenCLSource(std::string shaderName);
+std::string OpenCLSource(const std::string& shaderName, const std::string& shadersRootPath = "");
 
-std::vector<unsigned char> OpenCLBinary(std::string shaderName);
+std::vector<unsigned char> OpenCLBinary(const std::string& shaderName, const std::string& shadersRootPath = "");
 
-int SaveBinaryFile(std::string path, const std::vector<unsigned char> &binary);
+int SaveBinaryFile(const std::string& path, const std::vector<unsigned char> &binary);
 
-int SaveOpenCLBinary(std::string shaderName, const std::vector<unsigned char> &binary);
-
-cl::Program *loadOpenCLProgram(const std::string &programName);
+cl::Program *loadOpenCLProgram(const std::string &programName, const std::string& shadersRootPath = "");
 
 int buildProgram(cl::Program &program);
 

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2021 Glass Imaging Inc.
+ * Copyright (c) 2021-2022 Glass Imaging Inc.
+ * Author: Fabio Riccardi <fabio@glass-imaging.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,7 +108,7 @@ cl::Context getContext() {
 }
 #endif
 
-#if defined(__ANDROID__) && !defined(COMMAND_LINE_TOOL)
+#if defined(__ANDROID__) && defined(USE_ASSET_MANAGER)
 static std::map<std::string, std::string> cl_shaders;
 static std::map<std::string, std::vector<unsigned char>> cl_bytecode;
 
@@ -116,11 +117,11 @@ std::map<std::string, std::string>* getShadersMap() { return &cl_shaders; }
 std::map<std::string, std::vector<unsigned char>>* getBytecodeMap() { return &cl_bytecode; }
 #endif
 
-std::string OpenCLSource(std::string shaderName) {
-#if defined(__ANDROID__) && !defined(COMMAND_LINE_TOOL)
+std::string OpenCLSource(const std::string& shaderName, const std::string& shadersRootPath) {
+#if defined(__ANDROID__) && defined(USE_ASSET_MANAGER)
     return cl_shaders[shaderName];
 #else
-    std::ifstream file("OpenCL/" + shaderName, std::ios::in | std::ios::ate);
+    std::ifstream file(shadersRootPath + "OpenCL/" + shaderName, std::ios::in | std::ios::ate);
     if (file.is_open()) {
         std::streampos size = file.tellg();
         std::vector<char> memblock((int)size);
@@ -133,11 +134,11 @@ std::string OpenCLSource(std::string shaderName) {
 #endif
 }
 
-std::vector<unsigned char> OpenCLBinary(std::string shaderName) {
-#if defined(__ANDROID__) && !defined(COMMAND_LINE_TOOL)
+std::vector<unsigned char> OpenCLBinary(const std::string& shaderName, const std::string& shadersRootPath) {
+#if defined(__ANDROID__) && defined(USE_ASSET_MANAGER)
     return cl_bytecode[shaderName];
 #else
-    std::ifstream file("OpenCLBinaries/" + shaderName, std::ios::in | std::ios::binary | std::ios::ate);
+    std::ifstream file(shadersRootPath + "OpenCLBinaries/" + shaderName, std::ios::in | std::ios::binary | std::ios::ate);
     if (file.is_open()) {
         std::streampos size = file.tellg();
         std::vector<unsigned char> memblock((int)size);
@@ -150,7 +151,7 @@ std::vector<unsigned char> OpenCLBinary(std::string shaderName) {
 #endif
 }
 
-int SaveBinaryFile(std::string path, const std::vector<unsigned char>& binary) {
+int SaveBinaryFile(const std::string& path, const std::vector<unsigned char>& binary) {
     std::ofstream file(path, std::ios::out | std::ios::binary | std::ios::trunc);
     if (file.is_open()) {
         file.write((char*)binary.data(), binary.size());
@@ -160,10 +161,6 @@ int SaveBinaryFile(std::string path, const std::vector<unsigned char>& binary) {
     }
     LOG_ERROR(TAG) << "Couldn't open file " << path << std::endl;
     return -1;
-}
-
-int SaveOpenCLBinary(std::string shaderName, const std::vector<unsigned char>& binary) {
-    return SaveBinaryFile("OpenCL/" + shaderName, binary);
 }
 
 void handleProgramException(const cl::BuildError& e) {
@@ -182,7 +179,7 @@ static const char* cl_options = "-cl-std=CL2.0 -Werror -cl-fast-relaxed-math";
 
 static std::map<std::string, cl::Program*> cl_programs;
 
-cl::Program* loadOpenCLProgram(const std::string& programName) {
+cl::Program* loadOpenCLProgram(const std::string& programName, const std::string& shadersRootPath) {
     cl::Program* program = cl_programs[programName];
     if (program) {
         return program;
@@ -193,14 +190,14 @@ cl::Program* loadOpenCLProgram(const std::string& programName) {
         cl::Device device = cl::Device::getDefault();
 
 #if (defined(__ANDROID__) && defined(NDEBUG)) || (defined(__APPLE__) && !defined(TARGET_CPU_ARM64) && !defined(DEBUG))
-        std::vector<unsigned char> binary = OpenCLBinary(programName + ".o");
+        std::vector<unsigned char> binary = OpenCLBinary(programName + ".o", shadersRootPath);
 
         if (!binary.empty()) {
             program = new cl::Program(context, {device}, {binary});
         } else
 #endif
         {
-            program = new cl::Program(OpenCLSource(programName + ".cl"));
+            program = new cl::Program(OpenCLSource(programName + ".cl", shadersRootPath));
         }
         program->build(device, cl_options);
         cl_programs[programName] = program;
