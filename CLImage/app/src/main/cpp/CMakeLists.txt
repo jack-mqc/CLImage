@@ -36,6 +36,8 @@ add_library( # Sets the name of the library.
         cl_pipeline.cpp
         climage-test.cpp)
 
+target_compile_options( climage PRIVATE -Wall -Werror -DUSE_ASSET_MANAGER )
+
 # Add header files for opencl
 target_include_directories( climage PRIVATE ${CMAKE_SOURCE_DIR}/headers )
 target_include_directories( climage PRIVATE ${CMAKE_SOURCE_DIR}/climage )
@@ -85,7 +87,7 @@ target_link_libraries( # Specifies the target library.
         libz
         ${log-lib})
 
-target_compile_options( CLImageTest PRIVATE -Wall -Werror -DUSE_IOSTREAM_LOG -DCOMMAND_LINE_TOOL )
+target_compile_options( CLImageTest PRIVATE -Wall -Werror -DUSE_IOSTREAM_LOG )
 
 target_include_directories( CLImageTest PRIVATE ${CMAKE_SOURCE_DIR}/headers )
 target_include_directories( CLImageTest PRIVATE ${CMAKE_SOURCE_DIR}/climage )
@@ -96,7 +98,6 @@ add_executable(
         climage/gls_cl_error.cpp
         climage/gls_logging.cpp
         climage/gls_cl.cpp
-        climage/gls_android_support.cpp
         ShaderCompiler.cpp
 )
 
