@@ -17,13 +17,15 @@
 
 #include "gls_image_png.h"
 
+#include <assert.h>
+
 #include <png.h>
 #include <zlib.h>
 
 namespace gls {
 
-int read_png_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
-                  std::function<bool(int width, int height, std::vector<uint8_t*>* row_pointers)> image_allocator) {
+void read_png_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
+                   std::function<bool(int width, int height, std::vector<uint8_t*>* row_pointers)> image_allocator) {
     FILE* fp = fopen(filename.c_str(), "rb");
     if (!fp) {
         throw std::runtime_error("Could not open " + filename);
@@ -31,12 +33,12 @@ int read_png_file(const std::string& filename, int pixel_channels, int pixel_bit
 
     png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
     if (!png_ptr) {
-        return -1;
+        throw std::runtime_error("Could not create png read struct " + filename);
     }
     png_infop info_ptr = png_create_info_struct(png_ptr);
     if (!info_ptr) {
         png_destroy_write_struct(&png_ptr, nullptr);
-        return -1;
+        throw std::runtime_error("Could not create png info struct " + filename);
     }
 
     if (setjmp(png_jmpbuf(png_ptr))) {
@@ -50,7 +52,8 @@ int read_png_file(const std::string& filename, int pixel_channels, int pixel_bit
 
     png_uint_32 png_width, png_height;
     int png_color_type, png_bit_depth;
-    png_get_IHDR(png_ptr, info_ptr, &png_width, &png_height, &png_bit_depth, &png_color_type, nullptr, nullptr, nullptr);
+    png_get_IHDR(png_ptr, info_ptr, &png_width, &png_height, &png_bit_depth, &png_color_type, nullptr, nullptr,
+                 nullptr);
 
     // Match the image's data layout
     if ((pixel_channels == 4 && png_color_type == PNG_COLOR_TYPE_RGB) ||
@@ -71,7 +74,7 @@ int read_png_file(const std::string& filename, int pixel_channels, int pixel_bit
         png_set_expand_16(png_ptr);
     }
 
-#if  __LITTLE_ENDIAN__
+#if __LITTLE_ENDIAN__
     png_set_swap(png_ptr);
 #endif
     png_read_update_info(png_ptr, info_ptr);
@@ -88,24 +91,24 @@ int read_png_file(const std::string& filename, int pixel_channels, int pixel_bit
 
     png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
     fclose(fp);
-
-    return 0;
 }
 
-int write_png_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth, int compression_level,
-                   std::function<uint8_t*(int row)> row_pointer) {
+void write_png_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
+                    bool skip_alpha, int compression_level, std::function<uint8_t*(int row)> row_pointer) {
     FILE* fp = fopen(filename.c_str(), "wb");
     if (!fp) {
         throw std::runtime_error("Could not open " + filename);
     }
 
     png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
-    if (!png_ptr) return 4; /* out of memory */
+    if (!png_ptr) {
+        throw std::runtime_error("Could not create png write struct " + filename);
+    }
 
     png_infop info_ptr = png_create_info_struct(png_ptr);
     if (!info_ptr) {
         png_destroy_write_struct(&png_ptr, nullptr);
-        return 4; /* out of memory */
+        throw std::runtime_error("Could not create png info struct " + filename);
     }
 
     if (setjmp(png_jmpbuf(png_ptr))) {
@@ -116,15 +119,15 @@ int write_png_file(const std::string& filename, int width, int height, int pixel
 
     png_init_io(png_ptr, fp);
 
-    int png_color_type = PNG_COLOR_TYPE_RGB_ALPHA;
+    int png_color_type = PNG_COLOR_TYPE_RGB;
     if (pixel_channels == 1)
         png_color_type = PNG_COLOR_TYPE_GRAY;
     else if (pixel_channels == 2)
-        png_color_type = PNG_COLOR_TYPE_GRAY_ALPHA;
+        png_color_type = skip_alpha ? PNG_COLOR_TYPE_GRAY : PNG_COLOR_TYPE_GRAY_ALPHA;
     else if (pixel_channels == 3)
         png_color_type = PNG_COLOR_TYPE_RGB;
     else if (pixel_channels == 4)
-        png_color_type = PNG_COLOR_TYPE_RGB_ALPHA;
+        png_color_type = skip_alpha ? PNG_COLOR_TYPE_RGB : PNG_COLOR_TYPE_RGB_ALPHA;
 
     png_set_IHDR(png_ptr, info_ptr, width, height, pixel_bit_depth, png_color_type, PNG_INTERLACE_NONE,
                  PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
@@ -142,7 +145,11 @@ int write_png_file(const std::string& filename, int width, int height, int pixel
 
     png_write_info(png_ptr, info_ptr);
 
-#if  __LITTLE_ENDIAN__
+    if (skip_alpha && (pixel_channels == 2 || pixel_channels == 4)) {
+        png_set_filler(png_ptr, 0, PNG_FILLER_AFTER);
+    }
+
+#if __LITTLE_ENDIAN__
     png_set_swap(png_ptr);
 #endif
 
@@ -155,8 +162,6 @@ int write_png_file(const std::string& filename, int width, int height, int pixel
     png_write_end(png_ptr, nullptr);
     png_destroy_write_struct(&png_ptr, &info_ptr);
     fclose(fp);
-
-    return 0;
 }
 
 }  // namespace gls

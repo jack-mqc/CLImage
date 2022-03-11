@@ -17,14 +17,14 @@
 
 #include "gls_image_jpeg.h"
 
-#include <cassert>
-
 #include <jpeglib.h>
+
+#include <cassert>
 
 namespace gls {
 
-int read_jpeg_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
-                  std::function<std::span<uint8_t>(int width, int height)> image_allocator) {
+void read_jpeg_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
+                    std::function<std::span<uint8_t>(int width, int height)> image_allocator) {
     if ((pixel_channels != 3 && pixel_channels != 1) || pixel_bit_depth != 8) {
         throw std::runtime_error("Can only create JPEG files for 8-bit RGB or Grayscale images");
     }
@@ -33,8 +33,7 @@ int read_jpeg_file(const std::string& filename, int pixel_channels, int pixel_bi
     // to ensure ::jpeg_destroy_compress() gets called even if
     // we throw out of this function.
     auto dt = [](::jpeg_decompress_struct* ds) { ::jpeg_destroy_decompress(ds); };
-    std::unique_ptr<::jpeg_decompress_struct, decltype(dt)> decompressInfo(
-        new ::jpeg_decompress_struct, dt);
+    std::unique_ptr<::jpeg_decompress_struct, decltype(dt)> decompressInfo(new ::jpeg_decompress_struct, dt);
 
     // Note this is a shared pointer as we can share this
     // between objects which have copy constructed from each other
@@ -77,7 +76,8 @@ int read_jpeg_file(const std::string& filename, int pixel_channels, int pixel_bi
     // int colourSpace = decompressInfo->out_color_space;
 
     if (pixelSize != pixel_channels) {
-        throw std::runtime_error("Pixel size " + std::to_string(pixelSize) + " doesn't match the image's channels " + std::to_string(pixel_channels));
+        throw std::runtime_error("Pixel size " + std::to_string(pixelSize) + " doesn't match the image's channels " +
+                                 std::to_string(pixel_channels));
     }
 
     size_t row_stride = width * pixelSize;
@@ -97,12 +97,10 @@ int read_jpeg_file(const std::string& filename, int pixel_channels, int pixel_bi
         ptr += row_stride;
     }
     ::jpeg_finish_decompress(decompressInfo.get());
-
-    return 0;
 }
 
-int write_jpeg_file(const std::string& fileName, int width, int height, int stride, int pixel_channels, int pixel_bit_depth,
-                    const std::function<std::span<uint8_t>()>& image_data, int quality) {
+void write_jpeg_file(const std::string& fileName, int width, int height, int stride, int pixel_channels,
+                     int pixel_bit_depth, const std::function<std::span<uint8_t>()>& image_data, int quality) {
     if ((pixel_channels != 3 && pixel_channels != 1) || pixel_bit_depth != 8) {
         throw std::runtime_error("Can only create JPEG files for 8-bit RGB or Grayscale images");
     }
@@ -127,9 +125,9 @@ int write_jpeg_file(const std::string& fileName, int width, int height, int stri
     std::unique_ptr<::jpeg_compress_struct, decltype(dt)> compressInfo(new ::jpeg_compress_struct, dt);
     ::jpeg_create_compress(compressInfo.get());
     ::jpeg_stdio_dest(compressInfo.get(), outfile);
-    compressInfo->image_width = (JDIMENSION) width;
-    compressInfo->image_height = (JDIMENSION) height;
-    compressInfo->input_components = (JDIMENSION) pixel_channels;
+    compressInfo->image_width = (JDIMENSION)width;
+    compressInfo->image_height = (JDIMENSION)height;
+    compressInfo->input_components = (JDIMENSION)pixel_channels;
     compressInfo->in_color_space = static_cast<::J_COLOR_SPACE>(pixel_channels == 3 ? ::JCS_RGB : ::JCS_GRAYSCALE);
     compressInfo->err = ::jpeg_std_error(errorMgr.get());
     ::jpeg_set_defaults(compressInfo.get());
@@ -146,8 +144,6 @@ int write_jpeg_file(const std::string& fileName, int width, int height, int stri
 
     ::jpeg_finish_compress(compressInfo.get());
     fclose(outfile);
-
-    return 0;
 }
 
-}
+}  // namespace gls

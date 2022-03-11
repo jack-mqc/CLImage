@@ -22,18 +22,18 @@
 static const char* TAG = "CLImage Pipeline";
 
 // Simple image processing with opencl.hpp, using cl_image to pass data to and from the GPU
-int blur(const gls::cl_image_2d<gls::rgba_pixel>& input, gls::cl_image_2d<gls::rgba_pixel>* output) {
+int blur(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel>& input, gls::cl_image_2d<gls::rgba_pixel>* output) {
     try {
         // Load the shader source
-        const auto blurProgram = gls::loadOpenCLProgram("blur");
+        const auto blurProgram = glsContext->loadProgram("blur");
 
         // Bind the kernel parameters
         auto blurKernel = cl::KernelFunctor<cl::Image2D,  // input
                                             cl::Image2D   // output
-                                            >(*blurProgram, "blur");
+                                            >(blurProgram, "blur");
 
         // Schedule the kernel on the GPU
-        blurKernel(gls::buildEnqueueArgs(output->width, output->height), input.getImage2D(), output->getImage2D());
+        blurKernel(gls::OpenCLContext::buildEnqueueArgs(output->width, output->height), input.getImage2D(), output->getImage2D());
         return 0;
     } catch (cl::Error& err) {
         LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what()) << " - " << gls::clStatusToString(err.err())

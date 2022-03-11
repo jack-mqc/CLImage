@@ -22,7 +22,7 @@
 
 namespace gls {
 
-static const std::map<int, const std::string> error_codes = {
+static const std::map<int, const char*> error_codes = {
     { CL_SUCCESS, "CL_SUCCESS" },
     { CL_DEVICE_NOT_FOUND, "CL_DEVICE_NOT_FOUND" },
     { CL_DEVICE_NOT_AVAILABLE, "CL_DEVICE_NOT_AVAILABLE" },

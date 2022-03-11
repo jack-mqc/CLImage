@@ -81,7 +81,7 @@ void loadOpenCLBytecode(JNIEnv *env, jobject assetManager,
 }
 
 void loadResourceData(JNIEnv *env, jobject assetManager,
-                      std::vector<std::byte> *modelData,
+                      std::vector<std::byte> *resourceData,
                       const std::string &resourceName) {
     AAssetManager *mgr = AAssetManager_fromJava(env, assetManager);
     AAssetDir *assetDir = AAssetManager_openDir(mgr, "");
@@ -91,7 +91,7 @@ void loadResourceData(JNIEnv *env, jobject assetManager,
             AAsset *asset = AAssetManager_open(mgr, filename, AASSET_MODE_BUFFER);
             off_t assetLength = AAsset_getLength(asset);
             const void *assetBuffer = AAsset_getBuffer(asset);
-            *modelData = std::vector<std::byte>((std::byte *) assetBuffer,
+            *resourceData = std::vector<std::byte>((std::byte *) assetBuffer,
                                                 (std::byte *) assetBuffer + assetLength);
             AAsset_close(asset);
             break;

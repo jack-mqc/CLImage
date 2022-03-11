@@ -15,6 +15,8 @@
  * limitations under the License.
  ******************************************************************************/
 
+#include <map>
+
 #ifndef GLS_CL_HPP
 #define GLS_CL_HPP
 
@@ -31,8 +33,6 @@
 
 #elif __ANDROID__
 
-#include <map>
-
 #define CL_TARGET_OPENCL_VERSION 200
 #define CL_HPP_TARGET_OPENCL_VERSION 200
 
@@ -40,44 +40,51 @@
 #include "gls_icd_wrapper.h"
 
 #include <CL/cl_ext.h>
-
 #include <CL/opencl.hpp>
 
 #endif
 
-#include "gls_exception.hpp"
-
 namespace gls {
 
-cl::Context getContext();
-
-std::string OpenCLSource(const std::string& shaderName, const std::string& shadersRootPath = "");
-
-std::vector<unsigned char> OpenCLBinary(const std::string& shaderName, const std::string& shadersRootPath = "");
-
-int SaveBinaryFile(const std::string& path, const std::vector<unsigned char> &binary);
-
-cl::Program *loadOpenCLProgram(const std::string &programName, const std::string& shadersRootPath = "");
-
-int buildProgram(cl::Program &program);
-
-void handleProgramException(const cl::BuildError &e);
-
-cl::NDRange computeWorkGroupSizes(size_t width, size_t height);
-
-#ifdef __ANDROID__
-
-std::map<std::string, std::string> *getShadersMap();
-
-std::map<std::string, std::vector<unsigned char>> *getBytecodeMap();
-
+class OpenCLContext {
+    cl::Context _clContext;
+    const std::string _shadersRootPath;
+    std::map<std::string, cl::Program> _program_cache;
+#if defined(__ANDROID__) && defined(USE_ASSET_MANAGER)
+    std::map<std::string, std::string> cl_shaders;
+    std::map<std::string, std::vector<unsigned char>> cl_bytecode;
 #endif
 
-inline static cl::EnqueueArgs buildEnqueueArgs(size_t width, size_t height) {
-    cl::NDRange global_workgroup_size = cl::NDRange(width, height);
-    cl::NDRange local_workgroup_size = computeWorkGroupSizes(width, height);
-    return cl::EnqueueArgs(global_workgroup_size, local_workgroup_size);
-}
+   public:
+    OpenCLContext(const std::string& shadersRootPath = "");
+
+    cl::Context clContext() { return _clContext; }
+    const std::string& shadersRootPath() { return _shadersRootPath; }
+
+#if defined(__ANDROID__) && defined(USE_ASSET_MANAGER)
+    std::map<std::string, std::string>* getShadersMap() { return &cl_shaders; }
+    std::map<std::string, std::vector<unsigned char>>* getBytecodeMap() { return &cl_bytecode; }
+#endif
+
+    std::string OpenCLSource(const std::string& shaderName);
+    std::vector<unsigned char> OpenCLBinary(const std::string& shaderName);
+
+    cl::Program loadProgram(const std::string& programName, const std::string& shadersRootPath = "");
+
+    static int saveBinaryFile(const std::string& path, const std::vector<unsigned char>& binary);
+
+    static int buildProgram(cl::Program& program);
+
+    static void handleProgramException(const cl::BuildError& e);
+
+    static cl::NDRange computeWorkGroupSizes(size_t width, size_t height);
+
+    inline static cl::EnqueueArgs buildEnqueueArgs(size_t width, size_t height) {
+        cl::NDRange global_workgroup_size = cl::NDRange(width, height);
+        cl::NDRange local_workgroup_size = computeWorkGroupSizes(width, height);
+        return cl::EnqueueArgs(global_workgroup_size, local_workgroup_size);
+    }
+};
 
 std::string clStatusToString(cl_int status);
 

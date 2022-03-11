@@ -29,8 +29,10 @@ int main(int argc, const char* argv[]) {
     printf("Hello CLImage!\n");
 
     if (argc > 1) {
+        gls::OpenCLContext glsContext("");
+        auto clContext = glsContext.clContext();
         // Initialize the OpenCL environment and get the context
-        cl::Context context = gls::getContext();
+        // cl::Context context = gls::getContext();
 
         // Read the input file into an image object
         auto inputImage = gls::image<gls::rgba_pixel>::read_png_file(argv[1]);
@@ -38,13 +40,13 @@ int main(int argc, const char* argv[]) {
         LOG_INFO(TAG) << "inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
 
         // Load image data in OpenCL image texture
-        gls::cl_image_2d<gls::rgba_pixel> clInputImage(context, *inputImage);
+        gls::cl_image_2d<gls::rgba_pixel> clInputImage(clContext, *inputImage);
 
         // Output Image from OpenCL processing
-        gls::cl_image_2d<gls::rgba_pixel> clOutputImage(context, clInputImage.width, clInputImage.height);
+        gls::cl_image_2d<gls::rgba_pixel> clOutputImage(clContext, clInputImage.width, clInputImage.height);
 
         // Execute OpenCL Blur algorithm
-        if (blur(clInputImage, &clOutputImage) == 0) {
+        if (blur(&glsContext, clInputImage, &clOutputImage) == 0) {
             LOG_INFO(TAG) << "All done with Blur" << std::endl;
         } else {
             LOG_ERROR(TAG) << "Something wrong with the Blur." << std::endl;

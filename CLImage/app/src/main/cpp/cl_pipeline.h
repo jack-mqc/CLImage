@@ -21,6 +21,6 @@
 #include "climage/gls_cl_image.hpp"
 
 // Simple image processing with opencl.hpp, using cl_image to pass data to and from the GPU
-int blur(const gls::cl_image_2d<gls::rgba_pixel>& input, gls::cl_image_2d<gls::rgba_pixel>* output);
+int blur(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel>& input, gls::cl_image_2d<gls::rgba_pixel>* output);
 
 #endif  // CL_PIPELINE_H

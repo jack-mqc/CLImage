@@ -19,16 +19,16 @@
 #define GLS_IMAGE_JPEG_HPP
 
 #include <functional>
-#include <string>
 #include <span>
+#include <string>
 
 namespace gls {
 
-int read_jpeg_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
-                   std::function<std::span<uint8_t>(int width, int height)> image_allocator);
+void read_jpeg_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
+                    std::function<std::span<uint8_t>(int width, int height)> image_allocator);
 
-int write_jpeg_file(const std::string& fileName, int width, int height, int stride, int pixel_channels, int pixel_bit_depth,
-                    const std::function<std::span<uint8_t>()>& image_data, int quality);
+void write_jpeg_file(const std::string& fileName, int width, int height, int stride, int pixel_channels,
+                     int pixel_bit_depth, const std::function<std::span<uint8_t>()>& image_data, int quality);
 
-}
+}  // namespace gls
 #endif /* GLS_IMAGE_JPEG_HPP */

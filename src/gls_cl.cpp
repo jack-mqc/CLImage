@@ -15,11 +15,12 @@
  * limitations under the License.
  ******************************************************************************/
 
+#include "gls_cl.hpp"
+
 #include <fstream>
 #include <iostream>
 #include <map>
 
-#include "gls_cl.hpp"
 #include "gls_logging.h"
 
 namespace gls {
@@ -28,100 +29,80 @@ static const char* TAG = "CLImage";
 
 #ifdef __APPLE__
 
-cl::Context getContext() {
-    cl::Context context = cl::Context::getDefault();
+OpenCLContext::OpenCLContext(const std::string& shadersRootPath) : _shadersRootPath(shadersRootPath) {
+    _clContext = cl::Context::getDefault();
 
-    static bool initialized = false;
-    if (!initialized) {
-        std::vector<cl::Device> devices = context.getInfo<CL_CONTEXT_DEVICES>();
+    std::vector<cl::Device> devices = _clContext.getInfo<CL_CONTEXT_DEVICES>();
 
-        // Macs have multiple GPUs, select the one with most compute units
-        int max_compute_units = 0;
-        cl::Device best_device;
-        for (const auto& d : devices) {
-            int device_compute_units = d.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
-            if (device_compute_units > max_compute_units) {
-                max_compute_units = device_compute_units;
-                best_device = d;
-            }
+    // Macs have multiple GPUs, select the one with most compute units
+    int max_compute_units = 0;
+    cl::Device best_device;
+    for (const auto& d : devices) {
+        int device_compute_units = d.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
+        if (device_compute_units > max_compute_units) {
+            max_compute_units = device_compute_units;
+            best_device = d;
         }
-        cl::Device::setDefault(best_device);
-
-        cl::Device d = cl::Device::getDefault();
-        LOG_INFO(TAG) << "OpenCL Default Device: " << d.getInfo<CL_DEVICE_NAME>() << std::endl;
-        LOG_INFO(TAG) << "- Device Version: " << d.getInfo<CL_DEVICE_VERSION>() << std::endl;
-        LOG_INFO(TAG) << "- Driver Version: " << d.getInfo<CL_DRIVER_VERSION>() << std::endl;
-        LOG_INFO(TAG) << "- OpenCL C Version: " << d.getInfo<CL_DEVICE_OPENCL_C_VERSION>() << std::endl;
-        LOG_INFO(TAG) << "- Compute Units: " << d.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
-        LOG_INFO(TAG) << "- CL_DEVICE_MAX_WORK_GROUP_SIZE: " << d.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
-        LOG_INFO(TAG) << "- CL_DEVICE_EXTENSIONS: " << d.getInfo<CL_DEVICE_EXTENSIONS>() << std::endl;
-
-        initialized = true;
     }
-    return context;
+    cl::Device::setDefault(best_device);
+
+    cl::Device d = cl::Device::getDefault();
+    LOG_INFO(TAG) << "OpenCL Default Device: " << d.getInfo<CL_DEVICE_NAME>() << std::endl;
+    LOG_INFO(TAG) << "- Device Version: " << d.getInfo<CL_DEVICE_VERSION>() << std::endl;
+    LOG_INFO(TAG) << "- Driver Version: " << d.getInfo<CL_DRIVER_VERSION>() << std::endl;
+    LOG_INFO(TAG) << "- OpenCL C Version: " << d.getInfo<CL_DEVICE_OPENCL_C_VERSION>() << std::endl;
+    LOG_INFO(TAG) << "- Compute Units: " << d.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
+    LOG_INFO(TAG) << "- CL_DEVICE_MAX_WORK_GROUP_SIZE: " << d.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
+    LOG_INFO(TAG) << "- CL_DEVICE_EXTENSIONS: " << d.getInfo<CL_DEVICE_EXTENSIONS>() << std::endl;
 }
 
 #elif __ANDROID__
 
-cl::Context getContext() {
-    static bool initialized = false;
+OpenCLContext::OpenCLContext(const std::string& shadersRootPath) : _shadersRootPath(shadersRootPath) {
+    // Load libOpenCL
+    CL_WRAPPER_NS::bindOpenCLLibrary();
 
-    if (!initialized) {
-        CL_WRAPPER_NS::bindOpenCLLibrary();
-
-        std::vector<cl::Platform> platforms;
-        cl::Platform::get(&platforms);
-        cl::Platform platform;
-        for (auto& p : platforms) {
-            std::string version = p.getInfo<CL_PLATFORM_VERSION>();
-            if (version.find("OpenCL 2.") != std::string::npos) {
-                platform = p;
-            }
+    std::vector<cl::Platform> platforms;
+    cl::Platform::get(&platforms);
+    cl::Platform platform;
+    for (auto& p : platforms) {
+        std::string version = p.getInfo<CL_PLATFORM_VERSION>();
+        if (version.find("OpenCL 2.") != std::string::npos) {
+            platform = p;
         }
-        if (platform() == nullptr) {
-            throw cl::Error(-1, "No OpenCL 2.0 platform found.");
-        }
-
-        cl::Platform defaultPlatform = cl::Platform::setDefault(platform);
-        if (defaultPlatform != platform) {
-            throw cl::Error(-1, "Error setting default platform.");
-        }
-
-        cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platform)(), 0};
-        cl::Context context(CL_DEVICE_TYPE_ALL, properties);
-
-        cl::Device d = cl::Device::getDefault();
-        LOG_INFO(TAG) << "- Device: " << d.getInfo<CL_DEVICE_NAME>() << std::endl;
-        LOG_INFO(TAG) << "- Device Version: " << d.getInfo<CL_DEVICE_VERSION>() << std::endl;
-        LOG_INFO(TAG) << "- Driver Version: " << d.getInfo<CL_DRIVER_VERSION>() << std::endl;
-        LOG_INFO(TAG) << "- OpenCL C Version: " << d.getInfo<CL_DEVICE_OPENCL_C_VERSION>() << std::endl;
-        LOG_INFO(TAG) << "- Compute Units: " << d.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
-        LOG_INFO(TAG) << "- CL_DEVICE_MAX_WORK_GROUP_SIZE: " << d.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
-        LOG_INFO(TAG) << "- CL_DEVICE_EXTENSIONS: " << d.getInfo<CL_DEVICE_EXTENSIONS>() << std::endl;
-
-        cl::Context::setDefault(context);
-
-        initialized = true;
+    }
+    if (platform() == nullptr) {
+        throw cl::Error(-1, "No OpenCL 2.0 platform found.");
     }
 
-    return cl::Context::getDefault();
+    cl::Platform defaultPlatform = cl::Platform::setDefault(platform);
+    if (defaultPlatform != platform) {
+        throw cl::Error(-1, "Error setting default platform.");
+    }
+
+    cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platform)(), 0};
+    cl::Context context(CL_DEVICE_TYPE_ALL, properties);
+
+    cl::Device d = cl::Device::getDefault();
+    LOG_INFO(TAG) << "- Device: " << d.getInfo<CL_DEVICE_NAME>() << std::endl;
+    LOG_INFO(TAG) << "- Device Version: " << d.getInfo<CL_DEVICE_VERSION>() << std::endl;
+    LOG_INFO(TAG) << "- Driver Version: " << d.getInfo<CL_DRIVER_VERSION>() << std::endl;
+    LOG_INFO(TAG) << "- OpenCL C Version: " << d.getInfo<CL_DEVICE_OPENCL_C_VERSION>() << std::endl;
+    LOG_INFO(TAG) << "- Compute Units: " << d.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
+    LOG_INFO(TAG) << "- CL_DEVICE_MAX_WORK_GROUP_SIZE: " << d.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
+    LOG_INFO(TAG) << "- CL_DEVICE_EXTENSIONS: " << d.getInfo<CL_DEVICE_EXTENSIONS>() << std::endl;
+
+    // opencl.hpp relies on a default context
+    cl::Context::setDefault(context);
+    _clContext = cl::Context::getDefault();
 }
 #endif
 
-#if defined(__ANDROID__) && defined(USE_ASSET_MANAGER)
-static std::map<std::string, std::string> cl_shaders;
-static std::map<std::string, std::vector<unsigned char>> cl_bytecode;
-
-std::map<std::string, std::string>* getShadersMap() { return &cl_shaders; }
-
-std::map<std::string, std::vector<unsigned char>>* getBytecodeMap() { return &cl_bytecode; }
-#endif
-
-std::string OpenCLSource(const std::string& shaderName, const std::string& shadersRootPath) {
+std::string OpenCLContext::OpenCLSource(const std::string& shaderName) {
 #if defined(__ANDROID__) && defined(USE_ASSET_MANAGER)
     return cl_shaders[shaderName];
 #else
-    std::ifstream file(shadersRootPath + "OpenCL/" + shaderName, std::ios::in | std::ios::ate);
+    std::ifstream file(_shadersRootPath + "OpenCL/" + shaderName, std::ios::in | std::ios::ate);
     if (file.is_open()) {
         std::streampos size = file.tellg();
         std::vector<char> memblock((int)size);
@@ -134,11 +115,12 @@ std::string OpenCLSource(const std::string& shaderName, const std::string& shade
 #endif
 }
 
-std::vector<unsigned char> OpenCLBinary(const std::string& shaderName, const std::string& shadersRootPath) {
+std::vector<unsigned char> OpenCLContext::OpenCLBinary(const std::string& shaderName) {
 #if defined(__ANDROID__) && defined(USE_ASSET_MANAGER)
     return cl_bytecode[shaderName];
 #else
-    std::ifstream file(shadersRootPath + "OpenCLBinaries/" + shaderName, std::ios::in | std::ios::binary | std::ios::ate);
+    std::ifstream file(_shadersRootPath + "OpenCLBinaries/" + shaderName,
+                       std::ios::in | std::ios::binary | std::ios::ate);
     if (file.is_open()) {
         std::streampos size = file.tellg();
         std::vector<unsigned char> memblock((int)size);
@@ -151,7 +133,8 @@ std::vector<unsigned char> OpenCLBinary(const std::string& shaderName, const std
 #endif
 }
 
-int SaveBinaryFile(const std::string& path, const std::vector<unsigned char>& binary) {
+// Static
+int OpenCLContext::saveBinaryFile(const std::string& path, const std::vector<unsigned char>& binary) {
     std::ofstream file(path, std::ios::out | std::ios::binary | std::ios::trunc);
     if (file.is_open()) {
         file.write((char*)binary.data(), binary.size());
@@ -163,7 +146,8 @@ int SaveBinaryFile(const std::string& path, const std::vector<unsigned char>& bi
     return -1;
 }
 
-void handleProgramException(const cl::BuildError& e) {
+// Static
+void OpenCLContext::handleProgramException(const cl::BuildError& e) {
     LOG_ERROR(TAG) << "OpenCL Build Error - " << e.what() << ": " << clStatusToString(e.err()) << std::endl;
     // Print build info for all devices
     for (auto& pair : e.getBuildLog()) {
@@ -177,38 +161,37 @@ static const char* cl_options = "-cl-std=CL1.2 -Werror -cl-fast-relaxed-math";
 static const char* cl_options = "-cl-std=CL2.0 -Werror -cl-fast-relaxed-math";
 #endif
 
-static std::map<std::string, cl::Program*> cl_programs;
-
-cl::Program* loadOpenCLProgram(const std::string& programName, const std::string& shadersRootPath) {
-    cl::Program* program = cl_programs[programName];
-    if (program) {
+cl::Program OpenCLContext::loadProgram(const std::string& programName, const std::string& shadersRootPath) {
+    cl::Program program = _program_cache[programName];
+    if (program()) {
         return program;
     }
 
     try {
-        cl::Context context = getContext();
+        cl::Context context = clContext();
         cl::Device device = cl::Device::getDefault();
 
 #if (defined(__ANDROID__) && defined(NDEBUG)) || (defined(__APPLE__) && !defined(TARGET_CPU_ARM64) && !defined(DEBUG))
-        std::vector<unsigned char> binary = OpenCLBinary(programName + ".o", shadersRootPath);
+        std::vector<unsigned char> binary = OpenCLBinary(programName + ".o");
 
         if (!binary.empty()) {
-            program = new cl::Program(context, {device}, {binary});
+            program = cl::Program(context, {device}, {binary});
         } else
 #endif
         {
-            program = new cl::Program(OpenCLSource(programName + ".cl", shadersRootPath));
+            program = cl::Program(OpenCLSource(programName + ".cl"));
         }
-        program->build(device, cl_options);
-        cl_programs[programName] = program;
+        program.build(device, cl_options);
+        _program_cache[programName] = program;
         return program;
     } catch (const cl::BuildError& e) {
         handleProgramException(e);
-        return nullptr;
+        return cl::Program();
     }
 }
 
-int buildProgram(cl::Program& program) {
+// Static
+int OpenCLContext::buildProgram(cl::Program& program) {
     try {
         program.build(cl_options);
         for (auto& pair : program.getBuildInfo<CL_PROGRAM_BUILD_LOG>()) {
@@ -224,7 +207,7 @@ int buildProgram(cl::Program& program) {
 }
 
 // Compute a list of divisors in the range [1..32]
-std::vector<int> computeDivisors(const size_t val) {
+static std::vector<int> computeDivisors(const size_t val) {
     std::vector<int> divisors;
     int divisor = 32;
     while (divisor >= 1) {
@@ -237,7 +220,8 @@ std::vector<int> computeDivisors(const size_t val) {
 }
 
 // Compute the squarest workgroup of size <= max_workgroup_size
-cl::NDRange computeWorkGroupSizes(size_t width, size_t height) {
+// Static
+cl::NDRange OpenCLContext::computeWorkGroupSizes(size_t width, size_t height) {
     std::vector<int> width_divisors = computeDivisors(width);
     std::vector<int> height_divisors = computeDivisors(height);
 

@@ -43,6 +43,7 @@ template <typename T>
 struct basic_luma_pixel {
     constexpr static int channels = 1;
     constexpr static int bit_depth = 8 * sizeof(T);
+    typedef T dataType;
 
     union {
         struct {
@@ -62,6 +63,7 @@ template <typename T>
 struct basic_luma_alpha_pixel {
     constexpr static int channels = 2;
     constexpr static int bit_depth = 8 * sizeof(T);
+    typedef T dataType;
 
     union {
         struct {
@@ -82,6 +84,7 @@ template <typename T>
 struct basic_rgb_pixel {
     constexpr static int channels = 3;
     constexpr static int bit_depth = 8 * sizeof(T);
+    typedef T dataType;
 
     union {
         struct {
@@ -103,6 +106,7 @@ template <typename T>
 struct basic_rgba_pixel {
     constexpr static int channels = 4;
     constexpr static int bit_depth = 8 * sizeof(T);
+    typedef T dataType;
 
     union {
         struct {
@@ -179,10 +183,11 @@ class image : public basic_image<T> {
     const std::unique_ptr<std::vector<T>> _data_store = nullptr;
     const std::span<T> _data;
 
-public:
+   public:
     // Data is owned by the image and retained by _data_store
     image(int _width, int _height, int _stride)
-        : basic_image<T>(_width, _height), stride(_stride),
+        : basic_image<T>(_width, _height),
+          stride(_stride),
           _data_store(std::make_unique<std::vector<T>>(_stride * _height)),
           _data(_data_store->data(), _data_store->size()) {}
 
@@ -194,7 +199,7 @@ public:
         assert(_stride * _height <= data.size());
     }
 
-    image(int _width, int _height, std::span<T> data) : image<T>(_width, _height, _width, data) { }
+    image(int _width, int _height, std::span<T> data) : image<T>(_width, _height, _width, data) {}
 
     // row access
     T* operator[](int row) { return &_data[stride * row]; }
@@ -225,11 +230,17 @@ public:
     }
 
     // Write image to PNG file
-    // compression_level range: [0-9], 0 -> no compression (default), useful range: [3-6]
-    int write_png_file(const std::string& filename, int compression_level = 0) const {
+    // compression_level range: [0-9], 0 -> no compression (default), 1 -> *fast* compression, otherwise useful range: [3-6]
+    void write_png_file(const std::string& filename, int compression_level = 0) const {
         auto row_pointer = [this](int row) -> uint8_t* { return (uint8_t*)(*this)[row]; };
-        return gls::write_png_file(filename, basic_image<T>::width, basic_image<T>::height, T::channels,
-                                   T::bit_depth, compression_level, row_pointer);
+        gls::write_png_file(filename, basic_image<T>::width, basic_image<T>::height, T::channels, T::bit_depth,
+                            false, compression_level, row_pointer);
+    }
+
+    void write_png_file(const std::string& filename, bool skip_alpha, int compression_level = 0) const {
+        auto row_pointer = [this](int row) -> uint8_t* { return (uint8_t*)(*this)[row]; };
+        gls::write_png_file(filename, basic_image<T>::width, basic_image<T>::height, T::channels, T::bit_depth,
+                            skip_alpha, compression_level, row_pointer);
     }
 
     // image factory from JPEG file
@@ -249,11 +260,12 @@ public:
     }
 
     // Write image to JPEG file
-    int write_jpeg_file(const std::string& filename, int quality) const {
+    void write_jpeg_file(const std::string& filename, int quality) const {
         auto image_data = [this]() -> std::span<uint8_t> {
             return std::span<uint8_t>((uint8_t*)this->_data.data(), sizeof(T) * this->_data.size());
         };
-        return gls::write_jpeg_file(filename, basic_image<T>::width, basic_image<T>::height, stride, T::channels, T::bit_depth, image_data, quality);
+        gls::write_jpeg_file(filename, basic_image<T>::width, basic_image<T>::height, stride, T::channels, T::bit_depth,
+                             image_data, quality);
     }
 };
 
