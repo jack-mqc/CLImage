@@ -23,12 +23,9 @@
 
 static const char* TAG = "ShaderCompiler";
 
-extern "C" int __android_log_print(int prio, const char *tag, const char *fmt, ...) {
-    return 0;
-}
+extern "C" int __android_log_print(int prio, const char* tag, const char* fmt, ...) { return 0; }
 
-int main(int argc, const char *argv[])
-{
+int main(int argc, const char* argv[]) {
     std::cout << "OpenCL Shader Compiler." << std::endl;
 
     if (argc > 1 && strcmp(argv[1], "-help") == 0) {
@@ -38,15 +35,17 @@ int main(int argc, const char *argv[])
 
     // Read shader source from stdin
     std::stringbuf buffer;
-    std::ostream os (&buffer);
+    std::ostream os(&buffer);
     for (std::string line; std::getline(std::cin, line);) {
         os << line << std::endl;
     }
 
     try {
-        cl::Context context = gls::getContext();
+        gls::OpenCLContext glsContext;
+        auto context = glsContext.clContext();
+
         cl::Program program(buffer.str());
-        if (gls::buildProgram(program) != 0) {
+        if (gls::OpenCLContext::buildProgram(program) != 0) {
             return -1;
         }
 
@@ -57,12 +56,11 @@ int main(int argc, const char *argv[])
             return -1;
         }
 
-        gls::SaveBinaryFile(argc > 1 ? argv[1] : "binaryShader.o", binaries[0]);
+        gls::OpenCLContext::saveBinaryFile(argc > 1 ? argv[1] : "binaryShader.o", binaries[0]);
 
         return 0;
     } catch (cl::Error& err) {
-        LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what()) << " - " << gls::clStatusToString(err.err())
-                       << std::endl;
+        LOG_ERROR(TAG) << "Caught Exception: " << err.what() << " - " << gls::clStatusToString(err.err()) << std::endl;
         return -1;
     }
 }

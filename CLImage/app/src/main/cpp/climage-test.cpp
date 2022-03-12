@@ -40,11 +40,12 @@ Java_com_glassimaging_climage_TestCLImage_testCLImage(
     gls::AndroidBitmap output(env, outputBitmap);
 
     // Initialize the OpenCL environment and get the context
-    cl::Context context = gls::getContext();
+    gls::OpenCLContext glsContext("");
+    auto clContext = glsContext.clContext();
 
     // Load OpenCL Shaders stored in App's assets
-    gls::loadOpenCLShaders(env, assetManager, gls::getShadersMap());
-    gls::loadOpenCLBytecode(env, assetManager, gls::getBytecodeMap());
+    gls::loadOpenCLShaders(env, assetManager, glsContext.getShadersMap());
+    gls::loadOpenCLBytecode(env, assetManager, glsContext.getBytecodeMap());
 
     try {
         // Input Image for OpenCL processing
@@ -54,17 +55,17 @@ Java_com_glassimaging_climage_TestCLImage_testCLImage(
             gls::image<gls::rgba_pixel> inputImage(input.info().width, input.info().height,
                                                     input.lockPixels<gls::rgba_pixel>());
             // Move data from the Input Bitmap to the OpenCL Image
-            clInputImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel>>(context, inputImage);
+            clInputImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel>>(clContext, inputImage);
 
             // Release Bitmap Object
             input.unLockPixels();
         }
 
         // Output Image from OpenCL processing
-        gls::cl_image_2d<gls::rgba_pixel> clOutputImage(context, clInputImage->width, clInputImage->height);
+        gls::cl_image_2d<gls::rgba_pixel> clOutputImage(clContext, clInputImage->width, clInputImage->height);
 
         // Execute OpenCL Blur algorithm
-        if (blur(*clInputImage, &clOutputImage) == 0) {
+        if (blur(&glsContext, *clInputImage, &clOutputImage) == 0) {
             LOG_INFO(TAG) << "All done with Blur" << std::endl;
         } else {
             LOG_ERROR(TAG) << "Something wrong with the Blur." << std::endl;

@@ -29,10 +29,9 @@ int main(int argc, const char* argv[]) {
     printf("Hello CLImage!\n");
 
     if (argc > 1) {
+        // Initialize the OpenCL environment and get the context
         gls::OpenCLContext glsContext("");
         auto clContext = glsContext.clContext();
-        // Initialize the OpenCL environment and get the context
-        // cl::Context context = gls::getContext();
 
         // Read the input file into an image object
         auto inputImage = gls::image<gls::rgba_pixel>::read_png_file(argv[1]);
