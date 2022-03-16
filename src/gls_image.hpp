@@ -29,6 +29,7 @@
 
 #include "gls_image_jpeg.h"
 #include "gls_image_png.h"
+#include "gls_image_tiff.h"
 
 namespace gls {
 
@@ -266,6 +267,60 @@ class image : public basic_image<T> {
         };
         gls::write_jpeg_file(filename, basic_image<T>::width, basic_image<T>::height, stride, T::channels, T::bit_depth,
                              image_data, quality);
+    }
+
+
+    // image factory from TIFF file
+    static unique_ptr read_tiff_file(const std::string& filename) {
+        unique_ptr image = nullptr;
+
+        auto image_allocator = [&image](int width, int height) -> bool {
+            return (image = std::make_unique<gls::image<T>>(width, height)) != nullptr;
+        };
+
+        auto process_tiff_strip = [&image](int tiff_bitspersample, int tiff_samplesperpixel, int row, int strip_height,
+                                           uint8_t *tiff_buffer) -> bool {
+            typedef typename T::dataType dataType;
+
+            std::function<dataType()> nextTiffPixelSame = [&tiff_buffer]() -> dataType {
+                dataType pixelValue = *((dataType *) tiff_buffer);
+                tiff_buffer += sizeof(dataType);
+                return pixelValue;
+            };
+            std::function<dataType()> nextTiffPixel8to16 = [&tiff_buffer]() -> dataType {
+                return (dataType) *(tiff_buffer++) << 8;;
+            };
+            std::function<dataType()> nextTiffPixel16to8 = [&tiff_buffer]() -> dataType {
+                dataType pixelValue = (dataType) (*((uint16_t *) tiff_buffer) >> 8);
+                tiff_buffer += sizeof(uint16_t);
+                return pixelValue;
+            };
+
+            auto nextTiffPixel = tiff_bitspersample == T::bit_depth
+                ? nextTiffPixelSame
+                : (tiff_bitspersample == 8)
+                    ? nextTiffPixel8to16
+                    : nextTiffPixel16to8;
+
+            for (int y = row; y < row + strip_height; ++y) {
+                for (int x = 0; x < image->width; ++x) {
+                    for (int c = 0; c < std::min((int) tiff_samplesperpixel, T::channels); c++) {
+                        (*image)[y][x][c] = nextTiffPixel();
+                    }
+                }
+            }
+            return true;
+        };
+
+        gls::read_tiff_file(filename, T::channels, T::bit_depth, image_allocator, process_tiff_strip);
+
+        return image;
+    }
+
+    void write_tiff_file(const std::string& filename) const {
+        typedef typename T::dataType dataType;
+        auto row_pointer = [this](int row) -> dataType* { return (dataType*)(*this)[row]; };
+        gls::write_tiff_file<dataType>(filename, basic_image<T>::width, basic_image<T>::height, T::channels, T::bit_depth, row_pointer);
     }
 };
 

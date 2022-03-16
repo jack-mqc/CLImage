@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E51AACE727E1548400E99B58 /* gls_image_tiff.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E51AACE527E1548400E99B58 /* gls_image_tiff.cpp */; };
 		E5AD624C27616D7E0055F712 /* libpng.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624927616D7E0055F712 /* libpng.dylib */; };
 		E5AD624E27616D7E0055F712 /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624A27616D7E0055F712 /* libz.dylib */; };
 		E5AD625027616D7E0055F712 /* libjpeg.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624B27616D7E0055F712 /* libjpeg.dylib */; };
@@ -19,6 +20,7 @@
 		E5AD6292276178BA0055F712 /* cl_pipeline.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD628F276178BA0055F712 /* cl_pipeline.cpp */; };
 		E5AD6293276178BA0055F712 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD6290276178BA0055F712 /* main.cpp */; };
 		E5AD6294276179630055F712 /* OpenCL in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5AD628B276176BB0055F712 /* OpenCL */; };
+		E5DC9B6027DFBA9300399222 /* libtiff.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5DC9B5F27DFBA9300399222 /* libtiff.dylib */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -35,11 +37,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E51AACE427DFEDFD00E99B58 /* CLImageTest.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CLImageTest.entitlements; sourceTree = "<group>"; };
+		E51AACE527E1548400E99B58 /* gls_image_tiff.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = gls_image_tiff.cpp; path = ../../src/gls_image_tiff.cpp; sourceTree = "<group>"; };
+		E51AACE627E1548400E99B58 /* gls_image_tiff.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = gls_image_tiff.h; path = ../../src/gls_image_tiff.h; sourceTree = "<group>"; };
 		E5AD623C27616ABA0055F712 /* CLImageTest */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CLImageTest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5AD624927616D7E0055F712 /* libpng.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpng.dylib; path = CLImageTest/libs/libpng.dylib; sourceTree = "<group>"; };
 		E5AD624A27616D7E0055F712 /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = CLImageTest/libs/libz.dylib; sourceTree = "<group>"; };
 		E5AD624B27616D7E0055F712 /* libjpeg.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libjpeg.dylib; path = CLImageTest/libs/libjpeg.dylib; sourceTree = "<group>"; };
-		E5AD6258276170F10055F712 /* CLImageTest.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CLImageTest.entitlements; sourceTree = "<group>"; };
 		E5AD62592761717D0055F712 /* includes */ = {isa = PBXFileReference; lastKnownFileType = folder; path = includes; sourceTree = "<group>"; };
 		E5AD6274276174FC0055F712 /* gls_image.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = gls_image.hpp; path = ../../src/gls_image.hpp; sourceTree = "<group>"; };
 		E5AD6275276174FC0055F712 /* gls_image_jpeg.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = gls_image_jpeg.cpp; path = ../../src/gls_image_jpeg.cpp; sourceTree = "<group>"; };
@@ -57,6 +61,7 @@
 		E5AD628F276178BA0055F712 /* cl_pipeline.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = cl_pipeline.cpp; path = ../../../CLImage/app/src/main/cpp/cl_pipeline.cpp; sourceTree = "<group>"; };
 		E5AD6290276178BA0055F712 /* main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = main.cpp; path = ../../../CLImage/app/src/main/cpp/main.cpp; sourceTree = "<group>"; };
 		E5AD6291276178BA0055F712 /* cl_pipeline.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = cl_pipeline.h; path = ../../../CLImage/app/src/main/cpp/cl_pipeline.h; sourceTree = "<group>"; };
+		E5DC9B5F27DFBA9300399222 /* libtiff.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libtiff.dylib; path = CLImageTest/libs/libtiff.dylib; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -65,6 +70,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E5AD628D276178580055F712 /* OpenCL.framework in Frameworks */,
+				E5DC9B6027DFBA9300399222 /* libtiff.dylib in Frameworks */,
 				E5AD625027616D7E0055F712 /* libjpeg.dylib in Frameworks */,
 				E5AD624C27616D7E0055F712 /* libpng.dylib in Frameworks */,
 				E5AD624E27616D7E0055F712 /* libz.dylib in Frameworks */,
@@ -77,7 +83,6 @@
 		E5AD623327616ABA0055F712 = {
 			isa = PBXGroup;
 			children = (
-				E5AD6258276170F10055F712 /* CLImageTest.entitlements */,
 				E5AD623E27616ABB0055F712 /* CLImageTest */,
 				E5AD623D27616ABA0055F712 /* Products */,
 				E5AD624627616C8B0055F712 /* Frameworks */,
@@ -95,6 +100,7 @@
 		E5AD623E27616ABB0055F712 /* CLImageTest */ = {
 			isa = PBXGroup;
 			children = (
+				E51AACE427DFEDFD00E99B58 /* CLImageTest.entitlements */,
 				E5AD628E276178A60055F712 /* App */,
 				E5AD62592761717D0055F712 /* includes */,
 				E5AD6273276174DA0055F712 /* climage */,
@@ -110,6 +116,7 @@
 				E5AD624B27616D7E0055F712 /* libjpeg.dylib */,
 				E5AD624927616D7E0055F712 /* libpng.dylib */,
 				E5AD624A27616D7E0055F712 /* libz.dylib */,
+				E5DC9B5F27DFBA9300399222 /* libtiff.dylib */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -125,6 +132,8 @@
 				E5AD627B276174FC0055F712 /* gls_image_jpeg.h */,
 				E5AD6277276174FC0055F712 /* gls_image_png.cpp */,
 				E5AD6278276174FC0055F712 /* gls_image_png.h */,
+				E51AACE527E1548400E99B58 /* gls_image_tiff.cpp */,
+				E51AACE627E1548400E99B58 /* gls_image_tiff.h */,
 				E5AD6274276174FC0055F712 /* gls_image.hpp */,
 				E5AD627E276174FC0055F712 /* gls_logging.cpp */,
 				E5AD6279276174FC0055F712 /* gls_logging.h */,
@@ -223,6 +232,7 @@
 				E5AD6292276178BA0055F712 /* cl_pipeline.cpp in Sources */,
 				E5AD627F276174FC0055F712 /* gls_image_jpeg.cpp in Sources */,
 				E5AD6280276174FC0055F712 /* gls_cl.cpp in Sources */,
+				E51AACE727E1548400E99B58 /* gls_image_tiff.cpp in Sources */,
 				E5AD6283276174FC0055F712 /* gls_logging.cpp in Sources */,
 				E5AD6293276178BA0055F712 /* main.cpp in Sources */,
 				E5AD6281276174FC0055F712 /* gls_image_png.cpp in Sources */,
@@ -365,7 +375,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/CLImageTest/libs",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -381,7 +391,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/CLImageTest/libs",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;

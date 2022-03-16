@@ -34,7 +34,7 @@ int main(int argc, const char* argv[]) {
         auto clContext = glsContext.clContext();
 
         // Read the input file into an image object
-        auto inputImage = gls::image<gls::rgba_pixel>::read_png_file(argv[1]);
+        auto inputImage = gls::image<gls::rgba_pixel>::read_tiff_file(argv[1]);
 
         LOG_INFO(TAG) << "inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
 
@@ -53,7 +53,7 @@ int main(int argc, const char* argv[]) {
 
         // Use OpenCL's memory mapping for zero-copy image Output
         auto outputImage = clOutputImage.mapImage();
-        outputImage.write_png_file("output.png");
+        outputImage.write_tiff_file("output.tiff");
         clOutputImage.unmapImage(outputImage);
     }
 }

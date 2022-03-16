@@ -16,6 +16,11 @@ set_target_properties( libpng PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/j
 add_library( libjpg STATIC IMPORTED )
 set_target_properties( libjpg PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/jni/${ANDROID_ABI}/libjpeg-turbo.a )
 
+add_library( libtiff STATIC IMPORTED )
+set_target_properties( libtiff PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/jni/${ANDROID_ABI}/libtiff.a )
+add_library( libtiffxx STATIC IMPORTED )
+set_target_properties( libtiffxx PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/jni/${ANDROID_ABI}/libtiffxx.a )
+
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
 # You can define multiple libraries, and CMake builds them for you.
@@ -85,6 +90,8 @@ target_link_libraries( # Specifies the target library.
         libjpg
         libpng
         libz
+        libtiff
+        libtiffxx
         ${log-lib})
 
 target_compile_options( CLImageTest PRIVATE -Wall -Werror -DUSE_IOSTREAM_LOG )
