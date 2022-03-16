@@ -22,6 +22,12 @@
 #include <float.h>
 #include <span>
 
+#include <sys/stat.h>
+#include <sys/time.h>
+
+#include <iomanip>
+#include <iostream>
+
 #include "auto_ptr.hpp"
 
 namespace gls {
@@ -133,6 +139,74 @@ void write_tiff_file(const std::string& filename, int width, int height, int pix
     }
 }
 
+template <typename T>
+void write_dng_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
+                     tiff_compression compression, std::function<T*(int row)> row_pointer) {
+    auto_ptr<TIFF> tif(TIFFOpen(filename.c_str(), "w"),
+                       [](TIFF *tif) { TIFFClose(tif); });
+    if (tif) {
+        const std::array<float, 9> color_matrix = {
+            2.005, -0.771, -0.269,
+            -0.752, 1.688, 0.064,
+            -0.149, 0.283, 0.745
+        };
+
+        const std::array<float, 3> as_shot_neutral = {
+            0.807133, 1.0, 0.913289
+        };
+
+//        const auto base_black_level = static_cast<float>(raw_color.black);
+//        std::array<float, 4> black_level = {
+//            base_black_level + static_cast<float>(raw_color.cblack[0]),
+//            base_black_level + static_cast<float>(raw_color.cblack[1]),
+//            base_black_level + static_cast<float>(raw_color.cblack[2]),
+//            base_black_level + static_cast<float>(raw_color.cblack[3])
+//        };
+//
+//        if (raw_color.cblack[4] == 2 && raw_color.cblack[5] == 2) {
+//            for (int x = 0; x < raw_color.cblack[4]; ++x) {
+//                for (int y = 0; y < raw_color.cblack[5]; ++y) {
+//                    const auto index = y * 2 + x;
+//                    black_level[index] = raw_color.cblack[6 + index];
+//                }
+//            }
+//        }
+
+        static const uint32_t white_level = 0xffff; // raw_color.maximum;
+
+
+        static const short bayerPatternDimensions[] = { 2, 2 };
+
+        TIFFSetField(tif, TIFFTAG_DNGVERSION, "\01\01\00\00");
+        TIFFSetField(tif, TIFFTAG_SUBFILETYPE, 0);
+        TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_NONE);
+        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, width);
+        TIFFSetField(tif, TIFFTAG_IMAGELENGTH, height);
+        TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 16);
+        TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, 1);
+        TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+        TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_CFA);
+        TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
+        TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+        TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
+        TIFFSetField(tif, TIFFTAG_CFAREPEATPATTERNDIM, bayerPatternDimensions);
+        TIFFSetField(tif, TIFFTAG_CFAPATTERN, 4, "\01\02\00\01"); // GBRG
+        TIFFSetField(tif, TIFFTAG_MAKE, "DNG");
+        TIFFSetField(tif, TIFFTAG_UNIQUECAMERAMODEL, "DNG");
+        TIFFSetField(tif, TIFFTAG_COLORMATRIX1, 9, &color_matrix );
+        TIFFSetField(tif, TIFFTAG_ASSHOTNEUTRAL, 3, &as_shot_neutral );
+        // TIFFSetField(tif, TIFFTAG_BLACKLEVEL, 4, &black_level);
+        TIFFSetField(tif, TIFFTAG_WHITELEVEL, 1, &white_level);
+
+        for (int i = 0; i < height; i++)
+            TIFFWriteScanline(tif, row_pointer(i), i, 0);
+
+        TIFFWriteDirectory(tif);
+    } else {
+        throw std::runtime_error("Couldn't write tiff file.");
+    }
+}
+
 template
 void write_tiff_file<uint8_t>(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
                               tiff_compression compression, std::function<uint8_t*(int row)> row_pointer);
@@ -140,5 +214,9 @@ void write_tiff_file<uint8_t>(const std::string& filename, int width, int height
 template
 void write_tiff_file<uint16_t>(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
                                tiff_compression compression, std::function<uint16_t*(int row)> row_pointer);
+
+template
+void write_dng_file<uint16_t>(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
+                              tiff_compression compression, std::function<uint16_t*(int row)> row_pointer);
 
 }  // namespace gls

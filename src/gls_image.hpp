@@ -322,6 +322,14 @@ class image : public basic_image<T> {
         gls::write_tiff_file<dataType>(filename, basic_image<T>::width, basic_image<T>::height, T::channels, T::bit_depth,
                                        compression, row_pointer);
     }
+
+    // Write image to TIFF file
+    void write_dng_file(const std::string& filename, tiff_compression compression = tiff_compression::NONE) const {
+        typedef typename T::dataType dataType;
+        auto row_pointer = [this](int row) -> dataType* { return (dataType*)(*this)[row]; };
+        gls::write_dng_file<dataType>(filename, basic_image<T>::width, basic_image<T>::height, T::channels, T::bit_depth,
+                                       compression, row_pointer);
+    }
 };
 
 }  // namespace gls

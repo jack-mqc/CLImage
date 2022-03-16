@@ -40,6 +40,10 @@ template <typename T>
 void write_tiff_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
                      tiff_compression compression, std::function<T*(int row)> row_pointer);
 
+template <typename T>
+void write_dng_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
+                    tiff_compression compression, std::function<T*(int row)> row_pointer);
+
 }  // namespace gls
 
 #endif /* gls_image_tiff_hpp */
