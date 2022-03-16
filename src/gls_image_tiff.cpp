@@ -1,9 +1,17 @@
+// Copyright (c) 2021-2022 Glass Imaging Inc.
+// Author: Fabio Riccardi <fabio@glass-imaging.com>
 //
-//  gls_image_tiff.cpp
-//  CLImageTest
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//  Created by Fabio Riccardi on 3/15/22.
+//    http://www.apache.org/licenses/LICENSE-2.0
 //
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include "gls_image_tiff.h"
 
@@ -14,19 +22,9 @@
 #include <float.h>
 #include <span>
 
+#include "auto_ptr.hpp"
+
 namespace gls {
-
-// exception friendly pointer with destructor
-template <typename T>
-struct auto_ptr : std::unique_ptr<T, std::function<void(T*)>> {
-   public:
-    auto_ptr(T* val, std::function<void(T*)> destroyer)
-        : std::unique_ptr<T, std::function<void(T*)>>(val, destroyer) {}
-
-    // Allow the auto_ptr to be implicitly converted to the underlying pointer type
-    operator T*() const { return this->get(); }
-    operator T*() { return this->get(); }
-};
 
 void read_tiff_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
                     std::function<bool(int width, int height)> image_allocator,
@@ -70,22 +68,24 @@ void read_tiff_file(const std::string& filename, int pixel_channels, int pixel_b
                     tstrip_t strip = TIFFComputeStrip(tif, row, 0);
 
                     if ((TIFFReadEncodedStrip(tif, strip, tiffbuf, -1)) < 0) {
-                        throw std::runtime_error("invalid strip");
+                        throw std::runtime_error("Failed to encode TIFF strip.");
                     }
                     process_tiff_strip(tiff_bitspersample, tiff_samplesperpixel, row, nrow, tiffbuf);
                 }
             } else {
-                throw std::runtime_error("error allocating memory buffer for TIFF strip");
+                throw std::runtime_error("Error allocating memory buffer for TIFF strip.");
             }
         } else {
             throw std::runtime_error("Couldn't allocate image storage");
         }
+    } else {
+        throw std::runtime_error("Couldn't read tiff file.");
     }
 }
 
 template <typename T>
-bool write_tiff_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
-                     /* int compression, */ std::function<T*(int row)> row_pointer) {
+void write_tiff_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
+                     tiff_compression compression, std::function<T*(int row)> row_pointer) {
     auto_ptr<TIFF> tif(TIFFOpen(filename.c_str(), "w"),
                        [](TIFF *tif) { TIFFClose(tif); });
     if (tif) {
@@ -95,7 +95,7 @@ bool write_tiff_file(const std::string& filename, int width, int height, int pix
 
         TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, frame_width);
         TIFFSetField(tif, TIFFTAG_IMAGELENGTH, frame_height);
-        TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_NONE /* compression */);
+        TIFFSetField(tif, TIFFTAG_COMPRESSION, compression);
         TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
         TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, pixel_channels > 2 ? PHOTOMETRIC_RGB : PHOTOMETRIC_MINISBLACK);
         TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, pixel_bit_depth);
@@ -106,48 +106,39 @@ bool write_tiff_file(const std::string& filename, int width, int height, int pix
         TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
         TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
 
-        // TIFFSetField(tif,TIFFTAG_IMAGEDESCRIPTION, imgd);
-
-        // write frame data
-        // data is broken up into strips where each strip contains rowsperstrip complete rows of data
-        // each stript then has a size of rowsperstrip*frame_width pixels. the last strip is possibly
-        // smaller, so it is NOT padded with dummy data.
-
-        auto_ptr<T> tiffbuf((T*)_TIFFmalloc(TIFFStripSize(tif)),  // data buffer for a strip of the image
+        auto_ptr<T> tiffbuf((T*)_TIFFmalloc(TIFFStripSize(tif)),
                             [](T* tiffbuf) { _TIFFfree(tiffbuf); });
 
-        for (unsigned int row = 0; (row < frame_height); row += rowsperstrip) {
-            // compute rows in this strip:
-            uint32_t nrow = rowsperstrip;
-            if ((row + rowsperstrip) > frame_height) {
-                nrow = frame_height - row;  // this is the last strip ... and it is a bit smaller! ...
-                                            // it only contains the last rows of the image
-            }
-            tstrip_t strip = TIFFComputeStrip(tif, row, 0);
-            tsize_t bi = 0;
-            // go through the fraem row-wise
-            for (int y = 0; y < nrow; ++y) {
-                for (int x = 0; x < frame_width; ++x) {  // go through all pixels in the current row
-                    for (int c = 0; c < pixel_channels; c++) {
-                        tiffbuf[bi++] = row_pointer(row + y)[pixel_channels * x + c];
+        if (tiffbuf) {
+            for (int row = 0; (row < frame_height); row += rowsperstrip) {
+                uint32_t nrow = (row + rowsperstrip) > frame_height ? nrow = frame_height - row : rowsperstrip;
+                tstrip_t strip = TIFFComputeStrip(tif, row, 0);
+                tsize_t bi = 0;
+                for (int y = 0; y < nrow; ++y) {
+                    for (int x = 0; x < frame_width; ++x) {
+                        for (int c = 0; c < pixel_channels; c++) {
+                            tiffbuf[bi++] = row_pointer(row + y)[pixel_channels * x + c];
+                        }
                     }
                 }
+                if (TIFFWriteEncodedStrip(tif, strip, tiffbuf, bi * sizeof(T)) < 0) {
+                    throw std::runtime_error("Failed to encode TIFF strip.");
+                }
             }
-            if (TIFFWriteEncodedStrip(tif, strip, tiffbuf, bi * sizeof(T)) < 0) {
-                return false;
-            }
+        } else {
+            throw std::runtime_error("Error allocating memory buffer for TIFF strip.");
         }
-        return true;
+    } else {
+        throw std::runtime_error("Couldn't write tiff file.");
     }
-    return false;
 }
 
 template
-bool write_tiff_file<uint8_t>(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
-                              /* int compression, */ std::function<uint8_t*(int row)> row_pointer);
+void write_tiff_file<uint8_t>(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
+                              tiff_compression compression, std::function<uint8_t*(int row)> row_pointer);
 
 template
-bool write_tiff_file<uint16_t>(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
-                               /* int compression, */ std::function<uint16_t*(int row)> row_pointer);
+void write_tiff_file<uint16_t>(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
+                               tiff_compression compression, std::function<uint16_t*(int row)> row_pointer);
 
 }  // namespace gls

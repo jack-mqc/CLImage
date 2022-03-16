@@ -1,19 +1,17 @@
-/*******************************************************************************
- * Copyright (c) 2021-2022 Glass Imaging Inc.
- * Author: Fabio Riccardi <fabio@glass-imaging.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- ******************************************************************************/
+// Copyright (c) 2021-2022 Glass Imaging Inc.
+// Author: Fabio Riccardi <fabio@glass-imaging.com>
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #ifndef GLS_IMAGE_H
 #define GLS_IMAGE_H
@@ -244,7 +242,7 @@ class image : public basic_image<T> {
                             skip_alpha, compression_level, row_pointer);
     }
 
-    // image factory from JPEG file
+    // Image factory from JPEG file
     static unique_ptr read_jpeg_file(const std::string& filename) {
         unique_ptr image = nullptr;
 
@@ -270,7 +268,7 @@ class image : public basic_image<T> {
     }
 
 
-    // image factory from TIFF file
+    // Image factory from TIFF file
     static unique_ptr read_tiff_file(const std::string& filename) {
         unique_ptr image = nullptr;
 
@@ -317,10 +315,12 @@ class image : public basic_image<T> {
         return image;
     }
 
-    void write_tiff_file(const std::string& filename) const {
+    // Write image to TIFF file
+    void write_tiff_file(const std::string& filename, tiff_compression compression = tiff_compression::NONE) const {
         typedef typename T::dataType dataType;
         auto row_pointer = [this](int row) -> dataType* { return (dataType*)(*this)[row]; };
-        gls::write_tiff_file<dataType>(filename, basic_image<T>::width, basic_image<T>::height, T::channels, T::bit_depth, row_pointer);
+        gls::write_tiff_file<dataType>(filename, basic_image<T>::width, basic_image<T>::height, T::channels, T::bit_depth,
+                                       compression, row_pointer);
     }
 };
 

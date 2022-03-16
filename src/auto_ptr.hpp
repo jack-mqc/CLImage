@@ -13,12 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef CL_PIPELINE_H
-#define CL_PIPELINE_H
+#ifndef auto_ptr_h
+#define auto_ptr_h
 
-#include "climage/gls_cl_image.hpp"
+namespace gls {
 
-// Simple image processing with opencl.hpp, using cl_image to pass data to and from the GPU
-int blur(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel>& input, gls::cl_image_2d<gls::rgba_pixel>* output);
+// exception friendly pointer with destructor
+template <typename T>
+struct auto_ptr : std::unique_ptr<T, std::function<void(T*)>> {
+   public:
+    auto_ptr(T* val, std::function<void(T*)> destroyer)
+        : std::unique_ptr<T, std::function<void(T*)>>(val, destroyer) {}
 
-#endif  // CL_PIPELINE_H
+    // Allow the auto_ptr to be implicitly converted to the underlying pointer type
+    operator T*() const { return this->get(); }
+    operator T*() { return this->get(); }
+};
+
+}  // namespace gls
+
+#endif /* auto_ptr_h */

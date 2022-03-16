@@ -40,6 +40,7 @@
 		E51AACE427DFEDFD00E99B58 /* CLImageTest.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CLImageTest.entitlements; sourceTree = "<group>"; };
 		E51AACE527E1548400E99B58 /* gls_image_tiff.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = gls_image_tiff.cpp; path = ../../src/gls_image_tiff.cpp; sourceTree = "<group>"; };
 		E51AACE627E1548400E99B58 /* gls_image_tiff.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = gls_image_tiff.h; path = ../../src/gls_image_tiff.h; sourceTree = "<group>"; };
+		E51AACE827E1AA1500E99B58 /* auto_ptr.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = auto_ptr.hpp; path = ../../src/auto_ptr.hpp; sourceTree = "<group>"; };
 		E5AD623C27616ABA0055F712 /* CLImageTest */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CLImageTest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5AD624927616D7E0055F712 /* libpng.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpng.dylib; path = CLImageTest/libs/libpng.dylib; sourceTree = "<group>"; };
 		E5AD624A27616D7E0055F712 /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = CLImageTest/libs/libz.dylib; sourceTree = "<group>"; };
@@ -137,6 +138,7 @@
 				E5AD6274276174FC0055F712 /* gls_image.hpp */,
 				E5AD627E276174FC0055F712 /* gls_logging.cpp */,
 				E5AD6279276174FC0055F712 /* gls_logging.h */,
+				E51AACE827E1AA1500E99B58 /* auto_ptr.hpp */,
 			);
 			name = climage;
 			sourceTree = "<group>";
