@@ -112,7 +112,10 @@ bool write_tiff_file(const std::string& filename, int width, int height, int pix
         // data is broken up into strips where each strip contains rowsperstrip complete rows of data
         // each stript then has a size of rowsperstrip*frame_width pixels. the last strip is possibly
         // smaller, so it is NOT padded with dummy data.
-        T* const buf = (T*)_TIFFmalloc(TIFFStripSize(tif));  // data buffer for a strip of the image
+
+        auto_ptr<T> tiffbuf((T*)_TIFFmalloc(TIFFStripSize(tif)),  // data buffer for a strip of the image
+                            [](T* tiffbuf) { _TIFFfree(tiffbuf); });
+
         for (unsigned int row = 0; (row < frame_height); row += rowsperstrip) {
             // compute rows in this strip:
             uint32_t nrow = rowsperstrip;
@@ -126,11 +129,11 @@ bool write_tiff_file(const std::string& filename, int width, int height, int pix
             for (int y = 0; y < nrow; ++y) {
                 for (int x = 0; x < frame_width; ++x) {  // go through all pixels in the current row
                     for (int c = 0; c < pixel_channels; c++) {
-                        buf[bi++] = row_pointer(row + y)[pixel_channels * x + c];
+                        tiffbuf[bi++] = row_pointer(row + y)[pixel_channels * x + c];
                     }
                 }
             }
-            if (TIFFWriteEncodedStrip(tif, strip, buf, bi * sizeof(T)) < 0) {
+            if (TIFFWriteEncodedStrip(tif, strip, tiffbuf, bi * sizeof(T)) < 0) {
                 return false;
             }
         }
