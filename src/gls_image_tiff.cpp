@@ -139,71 +139,103 @@ void write_tiff_file(const std::string& filename, int width, int height, int pix
     }
 }
 
+#define TIFFTAG_FORWARDMATRIX1 50964
+#define TIFFTAG_FORWARDMATRIX2 50965
+#define TIFFTAG_TIMECODES 51043
+#define TIFFTAG_FRAMERATE 51044
+#define TIFFTAG_REELNAME 51081
+
+static const TIFFFieldInfo xtiffFieldInfo[] = {
+    { TIFFTAG_FORWARDMATRIX1, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "ForwardMatrix1" },
+    { TIFFTAG_FORWARDMATRIX2, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "ForwardMatrix2" },
+    { TIFFTAG_TIMECODES, -1, -1, TIFF_BYTE, FIELD_CUSTOM, 1, 1, "TimeCodes" },
+    { TIFFTAG_FRAMERATE, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "FrameRate" },
+    { TIFFTAG_REELNAME, -1, -1, TIFF_ASCII, FIELD_CUSTOM, 1, 0, "ReelName" }
+};
+
+static TIFFExtendProc parent_extender = NULL;  // In case we want a chain of extensions
+
+static void registerCustomTIFFTags( TIFF *tif )
+{
+    // Install the extended Tag field info
+    TIFFMergeFieldInfo( tif, xtiffFieldInfo, sizeof( xtiffFieldInfo ) / sizeof( xtiffFieldInfo[0] ) );
+
+    if( parent_extender )
+        (*parent_extender)(tif);
+}
+
+static void augment_libtiff_with_custom_tags( void )
+{
+    static int first_time = 1;
+    if( !first_time )
+        return;
+    first_time = 0;
+    parent_extender = TIFFSetTagExtender( registerCustomTIFFTags );
+}
+
 template <typename T>
 void write_dng_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
                      tiff_compression compression, std::function<T*(int row)> row_pointer) {
-    auto_ptr<TIFF> tif(TIFFOpen(filename.c_str(), "w"),
+    augment_libtiff_with_custom_tags();
+
+    auto_ptr<TIFF> tiff(TIFFOpen(filename.c_str(), "w"),
                        [](TIFF *tif) { TIFFClose(tif); });
-    if (tif) {
-        const std::array<float, 9> color_matrix = {
-            2.005, -0.771, -0.269,
-            -0.752, 1.688, 0.064,
-            -0.149, 0.283, 0.745
-        };
 
-        const std::array<float, 3> as_shot_neutral = {
-            0.807133, 1.0, 0.913289
-        };
-
-//        const auto base_black_level = static_cast<float>(raw_color.black);
-//        std::array<float, 4> black_level = {
-//            base_black_level + static_cast<float>(raw_color.cblack[0]),
-//            base_black_level + static_cast<float>(raw_color.cblack[1]),
-//            base_black_level + static_cast<float>(raw_color.cblack[2]),
-//            base_black_level + static_cast<float>(raw_color.cblack[3])
-//        };
-//
-//        if (raw_color.cblack[4] == 2 && raw_color.cblack[5] == 2) {
-//            for (int x = 0; x < raw_color.cblack[4]; ++x) {
-//                for (int y = 0; y < raw_color.cblack[5]; ++y) {
-//                    const auto index = y * 2 + x;
-//                    black_level[index] = raw_color.cblack[6 + index];
-//                }
-//            }
-//        }
-
-        static const uint32_t white_level = 0xffff; // raw_color.maximum;
-
-
+    if (tiff) {
         static const short bayerPatternDimensions[] = { 2, 2 };
+        static const unsigned char bayerPattern[] = "\01\02\00\01";
+        std::array<float, 9> color_matrix = {
+            1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553
+        };
+        std::array<float, 3> camera_multipliers = {
+            1.354894, 1.000000, 1.920234
+        };
+        const std::array<float, 3> as_shot_neutral = {
+            1.f / (camera_multipliers[0] / camera_multipliers[1]),
+            1.f,
+            1.f / (camera_multipliers[2] / camera_multipliers[1])
+        };
+        const std::array<float, 4> black_level = {0, 0, 0, 0};
+        static const uint32_t white_level = 0x0fff;
 
-        TIFFSetField(tif, TIFFTAG_DNGVERSION, "\01\01\00\00");
-        TIFFSetField(tif, TIFFTAG_SUBFILETYPE, 0);
-        TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_NONE);
-        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, width);
-        TIFFSetField(tif, TIFFTAG_IMAGELENGTH, height);
-        TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 16);
-        TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, 1);
-        TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-        TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_CFA);
-        TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
-        TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-        TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
-        TIFFSetField(tif, TIFFTAG_CFAREPEATPATTERNDIM, bayerPatternDimensions);
-        TIFFSetField(tif, TIFFTAG_CFAPATTERN, 4, "\01\02\00\01"); // GBRG
-        TIFFSetField(tif, TIFFTAG_MAKE, "DNG");
-        TIFFSetField(tif, TIFFTAG_UNIQUECAMERAMODEL, "DNG");
-        TIFFSetField(tif, TIFFTAG_COLORMATRIX1, 9, &color_matrix );
-        TIFFSetField(tif, TIFFTAG_ASSHOTNEUTRAL, 3, &as_shot_neutral );
-        // TIFFSetField(tif, TIFFTAG_BLACKLEVEL, 4, &black_level);
-        TIFFSetField(tif, TIFFTAG_WHITELEVEL, 1, &white_level);
+        TIFFSetField(tiff, TIFFTAG_DNGVERSION, "\01\04\00\00");
+        TIFFSetField(tiff, TIFFTAG_DNGBACKWARDVERSION, "\01\04\00\00");
+        TIFFSetField(tiff, TIFFTAG_SUBFILETYPE, 0);
+        TIFFSetField(tiff, TIFFTAG_COMPRESSION, COMPRESSION_NONE);
+        TIFFSetField(tiff, TIFFTAG_BITSPERSAMPLE, 16);
+        TIFFSetField(tiff, TIFFTAG_ROWSPERSTRIP, 1);
+        TIFFSetField(tiff, TIFFTAG_ORIENTATION, ORIENTATION_LEFTTOP);  // Mirrored data
+        TIFFSetField(tiff, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_CFA);
+        TIFFSetField(tiff, TIFFTAG_SAMPLESPERPIXEL, 1);
+        TIFFSetField(tiff, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+        TIFFSetField(tiff, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
+        TIFFSetField(tiff, TIFFTAG_CFAREPEATPATTERNDIM, &bayerPatternDimensions);
+        TIFFSetField(tiff, TIFFTAG_CFAPATTERN, 4, bayerPattern);
 
-        for (int i = 0; i < height; i++)
-            TIFFWriteScanline(tif, row_pointer(i), i, 0);
+        TIFFSetField(tiff, TIFFTAG_MAKE, "Glass");
+        TIFFSetField(tiff, TIFFTAG_UNIQUECAMERAMODEL, "Glass 1");
 
-        TIFFWriteDirectory(tif);
+        TIFFSetField(tiff, TIFFTAG_COLORMATRIX1, 9, &color_matrix);
+        TIFFSetField(tiff, TIFFTAG_CALIBRATIONILLUMINANT1, 21); // D65
+        TIFFSetField(tiff, TIFFTAG_ASSHOTNEUTRAL, 3, &as_shot_neutral);
+
+        TIFFSetField(tiff, TIFFTAG_CFALAYOUT, 1); // Rectangular (or square) layout
+        TIFFSetField(tiff, TIFFTAG_CFAPLANECOLOR, 3, "\00\01\02"); // RGB https://www.awaresystems.be/imaging/tiff/tifftags/cfaplanecolor.html
+        TIFFSetField(tiff, TIFFTAG_BAYERGREENSPLIT, 0);
+
+        TIFFSetField(tiff, TIFFTAG_BLACKLEVEL, 4, &black_level);
+        TIFFSetField(tiff, TIFFTAG_WHITELEVEL, 1, &white_level);
+
+        TIFFSetField(tiff, TIFFTAG_IMAGEWIDTH, width);
+        TIFFSetField(tiff, TIFFTAG_IMAGELENGTH, height);
+
+        for (int row = 0; row < height; row++) {
+            TIFFWriteScanline(tiff, row_pointer(row), row, 0);
+        }
+
+        TIFFWriteDirectory(tiff);
     } else {
-        throw std::runtime_error("Couldn't write tiff file.");
+        throw std::runtime_error("Couldn't open DNG file for writing.");
     }
 }
 
