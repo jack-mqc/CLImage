@@ -54,6 +54,8 @@ struct basic_luma_pixel {
     basic_luma_pixel() {}
     basic_luma_pixel(T _luma) : luma(_luma) {}
 
+    operator T() const { return luma; }
+
     T& operator[](int c) { return v[c]; }
     const T& operator[](int c) const { return v[c]; }
 };

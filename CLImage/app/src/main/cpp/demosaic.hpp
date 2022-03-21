@@ -10,8 +10,30 @@
 
 #include "gls_image.hpp"
 
-void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage, gls::image<gls::rgb_pixel_16>* rgbImage, int gx, int gy, int ry );
+enum BayerPattern {
+    grbg = 0,
+    gbrg = 1,
+    rggb = 2,
+    bggr = 3
+};
 
-void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, int rx0, int ry0, int bx0, int by0 );
+enum { red = 0, green = 1, blue = 2 };
+
+inline static std::array<gls::point, 3> bayerOffsets(BayerPattern bayerPattern) {
+    switch (bayerPattern) {
+        case grbg:
+            return { gls::point{1, 0}, gls::point{0, 0}, gls::point{0, 1} };
+        case gbrg:
+            return { gls::point{0, 1}, gls::point{0, 0}, gls::point{1, 0} };
+        case rggb:
+            return { gls::point{0, 0}, gls::point{1, 0}, gls::point{1, 1} };
+        case bggr:
+            return { gls::point{1, 1}, gls::point{1, 0}, gls::point{0, 0} };
+    }
+}
+
+void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage, gls::image<gls::rgb_pixel_16>* rgbImage, BayerPattern bayerPattern);
+
+void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayerPattern);
 
 #endif /* demosaic_hpp */
