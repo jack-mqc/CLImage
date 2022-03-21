@@ -8,13 +8,10 @@
 #ifndef demosaic_hpp
 #define demosaic_hpp
 
-void interpolateGreen(unsigned short *srcData, unsigned short *destData,
-                      int width, int height, int srcLineStride, int destLineStride,
-                      int srcOffset, int rOffset, int gOffset, int bOffset,
-                      int gx, int gy, int ry);
+#include "gls_image.hpp"
 
-void interpolateRedBlue(unsigned short *data, int width, int height, int lineStride,
-                        int rOffset, int gOffset, int bOffset,
-                        int rx0, int ry0, int bx0, int by0);
+void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage, gls::image<gls::rgb_pixel_16>* rgbImage, int gx, int gy, int ry );
+
+void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, int rx0, int ry0, int bx0, int by0 );
 
 #endif /* demosaic_hpp */
