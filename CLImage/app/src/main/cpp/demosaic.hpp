@@ -36,4 +36,6 @@ void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage, gls::image
 
 void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayerPattern);
 
+gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage);
+
 #endif /* demosaic_hpp */

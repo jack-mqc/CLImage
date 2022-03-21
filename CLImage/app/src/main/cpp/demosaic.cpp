@@ -165,40 +165,35 @@ void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage,
                 int cne = cxy - (cul + cbr) / 2;
                 int cnw = cxy - (cur + cbl) / 2;
 
-                int gradients[4] = {
-                    abs(dh) + abs(cdh), // horizontal
-                    abs(dv) + abs(cdv), // vertical
-                    abs(ne) + abs(cne), // north-east
-                    abs(nw) + abs(cnw)  // north-west
-                };
-
-                enum gradient {
+                enum GradientDirection {
                     horizontal = 0,
                     vertical = 1,
                     northEast = 2,
                     northWest = 3,
-                    flat = 4
+                    none = 4
                 };
 
-                gradient mind = flat, maxd = flat;
-                int ming = INT_MAX;
-                int maxg = 0;
-                for (int g = horizontal; g < flat; g++) {
-                    if (gradients[g] < ming) {
-                        ming = gradients[g];
-                        mind = static_cast<gradient>(g);
-                    }
-                    if (gradients[g] > maxg) {
-                        maxg = gradients[g];
-                        maxd = static_cast<gradient>(g);
+                int gradients[4] = {
+                    abs(dh) + abs(cdh), // horizontal
+                    abs(dv) + abs(cdv), // vertical
+                    abs(ne) + abs(cne), // northEast
+                    abs(nw) + abs(cnw)  // northWest
+                };
+
+                GradientDirection minimumDirection = none;
+                int minimumGradient = INT_MAX;
+                for (GradientDirection g : { horizontal, vertical, northEast, northWest }) {
+                    if (gradients[g] < minimumGradient) {
+                        minimumDirection = g;
+                        minimumGradient = gradients[g];
                     }
                 }
 
                 // Only work on parts of the image that have enough "detail"
 
-                if (mind != flat && ming > xy / 4) {
+                if (minimumDirection != none && minimumGradient > xy / 4) {
                     int sample;
-                    switch (mind) {
+                    switch (minimumDirection) {
                         case horizontal:
                             sample = (xy + (hl + hr) / 2 + cdh) / 2;
                             break;
@@ -211,7 +206,7 @@ void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage,
                         case northWest:
                             sample = (xy + (ur + bl) / 2 + cnw) / 2;
                             break;
-                        case flat:
+                        case none:
                             // never happens, just make the compiler happy
                             sample = (*rgbImage)[y][x][green];
                             break;
@@ -291,4 +286,45 @@ void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayer
             }
         }
     }
+}
+
+gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage) {
+    auto rgbImage = std::make_unique<gls::image<gls::rgb_pixel_16>>(rawImage.width, rawImage.height);
+
+    printf("demosaicing green\n");
+    interpolateGreen(rawImage, rgbImage.get(), BayerPattern::grbg);
+
+    printf("demosaicing red and blue\n");
+    interpolateRedBlue(rgbImage.get(), BayerPattern::grbg);
+
+    std::array<float, 9> color_matrix = {
+        1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553
+    };
+    std::array<float, 3> camera_multipliers = {
+        1.354894, 1.000000, 1.920234
+        // 1.356432 1.001554 1.922853
+    };
+    const std::array<float, 3> as_shot_neutral = {
+        1.f / (camera_multipliers[0] / camera_multipliers[1]),
+        1.f,
+        1.f / (camera_multipliers[2] / camera_multipliers[1])
+    };
+
+    for (int y = 0; y < rgbImage->height; y++) {
+        for (int x = 0; x < rgbImage->width; x++) {
+            auto& p = (*rgbImage)[y][x];
+            p.red = p.red * camera_multipliers[0];
+            p.blue = p.blue * camera_multipliers[2];
+
+            auto pout = gls::rgb_pixel_16(
+                                          p[0] * color_matrix[0] + p[1] * color_matrix[3] + p[2] * color_matrix[6],
+                                          p[0] * color_matrix[1] + p[1] * color_matrix[4] + p[2] * color_matrix[7],
+                                          p[0] * color_matrix[2] + p[1] * color_matrix[5] + p[2] * color_matrix[8]
+                                          );
+
+            p = gls::rgb_pixel_16(pout.red, pout.green, pout.blue);
+        }
+    }
+
+    return rgbImage;
 }
