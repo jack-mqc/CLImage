@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "1320"
+   LastUpgradeVersion = "1330"
    version = "1.3">
    <BuildAction
       parallelizeBuildables = "YES"
@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E5AD623B27616ABA0055F712"
-               BuildableName = "CLImageTest"
-               BlueprintName = "CLImageTest"
+               BlueprintIdentifier = "E5188C6827EA63A700F2332C"
+               BuildableName = "RawPipeline"
+               BlueprintName = "RawPipeline"
                ReferencedContainer = "container:CLImageTest.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -26,22 +26,7 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES"
-      enableAddressSanitizer = "YES"
-      enableASanStackUseAfterReturn = "YES"
-      enableUBSanitizer = "YES">
-      <AdditionalOptions>
-         <AdditionalOption
-            key = "NSZombieEnabled"
-            value = "YES"
-            isEnabled = "YES">
-         </AdditionalOption>
-         <AdditionalOption
-            key = "MallocScribble"
-            value = ""
-            isEnabled = "YES">
-         </AdditionalOption>
-      </AdditionalOptions>
+      shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
       </Testables>
    </TestAction>
@@ -49,22 +34,19 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      enableASanStackUseAfterReturn = "YES"
-      disableMainThreadChecker = "YES"
       launchStyle = "0"
       useCustomWorkingDirectory = "NO"
       ignoresPersistentStateOnLaunch = "NO"
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
-      enableGPUValidationMode = "1"
       allowLocationSimulation = "YES">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E5AD623B27616ABA0055F712"
-            BuildableName = "CLImageTest"
-            BlueprintName = "CLImageTest"
+            BlueprintIdentifier = "E5188C6827EA63A700F2332C"
+            BuildableName = "RawPipeline"
+            BlueprintName = "RawPipeline"
             ReferencedContainer = "container:CLImageTest.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -78,16 +60,16 @@
    <ProfileAction
       buildConfiguration = "Release"
       shouldUseLaunchSchemeArgsEnv = "YES"
-      savedToolIdentifier = "Time Profiler"
+      savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E5AD623B27616ABA0055F712"
-            BuildableName = "CLImageTest"
-            BlueprintName = "CLImageTest"
+            BlueprintIdentifier = "E5188C6827EA63A700F2332C"
+            BuildableName = "RawPipeline"
+            BlueprintName = "RawPipeline"
             ReferencedContainer = "container:CLImageTest.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

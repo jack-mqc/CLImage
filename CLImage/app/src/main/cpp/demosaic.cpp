@@ -443,8 +443,8 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     gls::image<gls::luma_pixel_16> scaledRawImage = gls::image<gls::luma_pixel_16>(rawImage.width, rawImage.height);
     for (int y = 0; y < rawImage.height / 2; y++) {
         for (int x = 0; x < rawImage.width / 2; x++) {
-            for (auto c : {red, green, blue, green2}) {
-                const auto o = offsets[c];
+            for (int c = 0; c < 4; c++) {
+                const auto& o = offsets[c];
                 scaledRawImage[2 * y + o.y][2 * x + o.x] = clamp(scale_mul[c] * rawImage[2 * y + o.y][2 * x + o.x]);
             }
         }
@@ -463,8 +463,8 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     // Transform to RGB space
     for (int y = 0; y < rgbImage->height; y++) {
         for (int x = 0; x < rgbImage->width; x++) {
-            const auto p = (*rgbImage)[y][x];
-            (*rgbImage)[y][x] = gls::rgb_pixel_16 {
+            auto& p = (*rgbImage)[y][x];
+            p = {
                 clamp(p[0] * rgb_cam[0][0] + p[1] * rgb_cam[0][1] + p[2] * rgb_cam[0][2]),
                 clamp(p[0] * rgb_cam[1][0] + p[1] * rgb_cam[1][1] + p[2] * rgb_cam[1][2]),
                 clamp(p[0] * rgb_cam[2][0] + p[1] * rgb_cam[2][1] + p[2] * rgb_cam[2][2])

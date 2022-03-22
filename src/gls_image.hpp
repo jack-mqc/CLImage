@@ -209,6 +209,22 @@ class image : public basic_image<T> {
 
     const std::span<T> pixels() const { return _data; }
 
+    void apply(std::function<void(const T& pixel)> process) const {
+        for (int y = 0; y < basic_image<T>::height; y++) {
+            for (int x = 0; x < basic_image<T>::width; x++) {
+                process((*this)[y][x]);
+            }
+        }
+    }
+
+    void apply(std::function<void(T& pixel)> process) {
+        for (int y = 0; y < basic_image<T>::height; y++) {
+            for (int x = 0; x < basic_image<T>::width; x++) {
+                process((*this)[y][x]);
+            }
+        }
+    }
+
     const size_t size_in_bytes() { return _data.size() * basic_image<T>::pixel_size; }
 
     // image factory from PNG file
