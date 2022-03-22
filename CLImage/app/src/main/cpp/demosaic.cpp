@@ -10,6 +10,15 @@
 
 #include "demosaic.hpp"
 
+enum { red = 0, green = 1, blue = 2, green2 = 3 };
+
+static const std::array<std::array<gls::point, 4>, 4> bayerOffsets = {
+    std::array<gls::point, 4> { gls::point{1, 0}, gls::point{0, 0}, gls::point{0, 1}, gls::point{1, 1} }, // grbg
+    std::array<gls::point, 4> { gls::point{0, 1}, gls::point{0, 0}, gls::point{1, 0}, gls::point{1, 1} }, // gbrg
+    std::array<gls::point, 4> { gls::point{0, 0}, gls::point{1, 0}, gls::point{1, 1}, gls::point{0, 1} }, // rggb
+    std::array<gls::point, 4> { gls::point{1, 1}, gls::point{1, 0}, gls::point{0, 0}, gls::point{0, 1} }  // bggr
+};
+
 inline uint16_t clamp(int x) { return x < 0 ? 0 : x > 0xffff ? 0xffff : x; }
 
 void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage,
@@ -17,7 +26,7 @@ void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage,
     const int width = rawImage.width;
     const int height = rawImage.height;
 
-    auto offsets = bayerOffsets(bayerPattern);
+    auto offsets = bayerOffsets[bayerPattern];
     const gls::point r = offsets[red];
     const gls::point g = offsets[green];
 
@@ -236,7 +245,7 @@ void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayer
     const int width = image->width;
     const int height = image->height;
 
-    auto offsets = bayerOffsets(bayerPattern);
+    auto offsets = bayerOffsets[bayerPattern];
 
     for (int y = 1; y < height - 1; y++) {
         for (int x = 1; x < width - 1; x++) {
@@ -288,43 +297,206 @@ void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayer
     }
 }
 
+// XYZ -> RGB Transform
+const float xyz_rgb[3][3] = {
+    {0.4124564, 0.3575761, 0.1804375},
+    {0.2126729, 0.7151522, 0.0721750},
+    {0.0193339, 0.1191920, 0.9503041}
+};
+
+void pseudoinverse(double (*in)[3], double (*out)[3], int size) {
+    double work[3][6], num;
+    int i, j, k;
+
+    for (i = 0; i < 3; i++) {
+        for (j = 0; j < 6; j++) {
+            work[i][j] = j == i + 3;
+        }
+        for (j = 0; j < 3; j++) {
+            for (k = 0; k < size && k < 4; k++) {
+                work[i][j] += in[k][i] * in[k][j];
+            }
+        }
+    }
+    for (i = 0; i < 3; i++) {
+        num = work[i][i];
+        for (j = 0; j < 6; j++) {
+            if (fabs(num) > 0.00001f) {
+                work[i][j] /= num;
+            }
+        }
+        for (k = 0; k < 3; k++) {
+            if (k == i)
+                continue;
+            num = work[k][i];
+            for (j = 0; j < 6; j++) {
+                work[k][j] -= work[i][j] * num;
+            }
+        }
+    }
+    for (i = 0; i < size && i < 4; i++) {
+        for (j = 0; j < 3; j++) {
+            for (out[i][j] = k = 0; k < 3; k++) {
+                out[i][j] += work[j][k + 3] * in[i][k];
+            }
+        }
+    }
+}
+
+void cam_xyz_coeff(float rgb_cam[3][3], float pre_mul[3], const float cam_xyz[3][3]) {
+    double cam_rgb[3][3];
+    for (int i = 0; i < 3; i++) /* Multiply out XYZ colorspace */
+        for (int j = 0; j < 3; j++) {
+            cam_rgb[i][j] = 0;
+            for (int k = 0; k < 3; k++)
+                cam_rgb[i][j] += cam_xyz[i][k] * xyz_rgb[k][j];
+        }
+
+    for (int i = 0; i < 3; i++) { /* Normalize cam_rgb so that */
+        double num = 0;
+        for (int j = 0; j < 3; j++) /* cam_rgb * (1,1,1) is (1,1,1,1) */
+            num += cam_rgb[i][j];
+        if (num > 0.00001) {
+            for (int j = 0; j < 3; j++) {
+                cam_rgb[i][j] /= num;
+            }
+            pre_mul[i] = 1 / num;
+        } else {
+            for (int j = 0; j < 3; j++) {
+                cam_rgb[i][j] = 0.0;
+            }
+            pre_mul[i] = 1.0;
+        }
+    }
+
+    double inverse[3][3];
+    pseudoinverse(cam_rgb, inverse, 3);
+
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            rgb_cam[i][j] = inverse[j][i];
+        }
+    }
+}
+
 gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage) {
+    // From DNG Metadata
+    const float color_matrix[3][3] = {
+        { 1.9435, -0.8992, -0.1936 },
+        { 0.1144,  0.8380,  0.0475 },
+        { 0.0136,  0.1203,  0.3553 }
+    };
+    const float as_shot_neutral[3] = {
+        0.7380, 1, 0.5207
+    };
+
+    float cam_mul[3];
+    for (int i = 0; i < 3; i++) {
+        cam_mul[i] = 1.0 / as_shot_neutral[i];
+    }
+
+    float rgb_cam[3][3];
+    float pre_mul[4];
+    cam_xyz_coeff(rgb_cam, pre_mul, color_matrix);
+
+    // If cam_mul is available use that instead of pre_mul
+    for (int i = 0; i < 3; i++) {
+        pre_mul[i] = cam_mul[i];
+    }
+    pre_mul[3] = pre_mul[1];
+
+    printf("rgb_cam: \n");
+    for (int j = 0; j < 3; j++) {
+        for (int i = 0; i < 3; i++) {
+            printf("%f, ", rgb_cam[j][i]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+
+    printf("pre_mul: \n");
+    for (int i = 0; i < 4; i++) {
+        printf("%f, ", pre_mul[i]);
+    }
+    printf("\n");
+
+    auto minmax = std::minmax_element(std::begin(pre_mul), std::end(pre_mul));
+
+    // TODO: This is objectionable: don't renormalize, just use the max value from metadata
+    float maximum = 0;
+    for (const auto p : rawImage.pixels()) {
+        if (p > maximum) {
+            maximum = p;
+        }
+    }
+
+    // Scale Input Image
+    std::array<float, 4> scale_mul;
+    for (int c = 0; c < 4; c++) {
+        printf("pre_mul[c]: %f, *minmax.second: %f, maximum: %f\n", pre_mul[c], *minmax.second, maximum);
+        scale_mul[c] = (pre_mul[c] / *minmax.first) * 65535.0 / maximum;
+    }
+    printf("scale_mul: %f, %f, %f, %f\n", scale_mul[0], scale_mul[1], scale_mul[2], scale_mul[3]);
+
+    const auto bayerPattern = BayerPattern::gbrg;
+    const auto offsets = bayerOffsets[bayerPattern];
+    gls::image<gls::luma_pixel_16> scaledRawImage = gls::image<gls::luma_pixel_16>(rawImage.width, rawImage.height);
+    for (int y = 0; y < rawImage.height / 2; y++) {
+        for (int x = 0; x < rawImage.width / 2; x++) {
+            for (auto c : {red, green, blue, green2}) {
+                const auto o = offsets[c];
+                scaledRawImage[2 * y + o.y][2 * x + o.x] = clamp(scale_mul[c] * rawImage[2 * y + o.y][2 * x + o.x]);
+            }
+        }
+    }
+
     auto rgbImage = std::make_unique<gls::image<gls::rgb_pixel_16>>(rawImage.width, rawImage.height);
 
-    printf("demosaicing green\n");
-    interpolateGreen(rawImage, rgbImage.get(), BayerPattern::grbg);
+    printf("interpolating green channel...\n");
+    interpolateGreen(scaledRawImage, rgbImage.get(), bayerPattern);
 
-    printf("demosaicing red and blue\n");
-    interpolateRedBlue(rgbImage.get(), BayerPattern::grbg);
+    printf("interpolating red and blue channels...\n");
+    interpolateRedBlue(rgbImage.get(), bayerPattern);
 
-    std::array<float, 9> color_matrix = {
-        1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553
-    };
-    std::array<float, 3> camera_multipliers = {
-        1.354894, 1.000000, 1.920234
-        // 1.356432 1.001554 1.922853
-    };
-    const std::array<float, 3> as_shot_neutral = {
-        1.f / (camera_multipliers[0] / camera_multipliers[1]),
-        1.f,
-        1.f / (camera_multipliers[2] / camera_multipliers[1])
-    };
+    printf("...done with demosaicing.\n");
 
+    // Transform to RGB space
     for (int y = 0; y < rgbImage->height; y++) {
         for (int x = 0; x < rgbImage->width; x++) {
-            auto& p = (*rgbImage)[y][x];
-            p.red = p.red * camera_multipliers[0];
-            p.blue = p.blue * camera_multipliers[2];
-
-            auto pout = gls::rgb_pixel_16(
-                                          p[0] * color_matrix[0] + p[1] * color_matrix[3] + p[2] * color_matrix[6],
-                                          p[0] * color_matrix[1] + p[1] * color_matrix[4] + p[2] * color_matrix[7],
-                                          p[0] * color_matrix[2] + p[1] * color_matrix[5] + p[2] * color_matrix[8]
-                                          );
-
-            p = gls::rgb_pixel_16(pout.red, pout.green, pout.blue);
+            const auto p = (*rgbImage)[y][x];
+            (*rgbImage)[y][x] = gls::rgb_pixel_16 {
+                clamp(p[0] * rgb_cam[0][0] + p[1] * rgb_cam[0][1] + p[2] * rgb_cam[0][2]),
+                clamp(p[0] * rgb_cam[1][0] + p[1] * rgb_cam[1][1] + p[2] * rgb_cam[1][2]),
+                clamp(p[0] * rgb_cam[2][0] + p[1] * rgb_cam[2][1] + p[2] * rgb_cam[2][2])
+            };
         }
     }
 
     return rgbImage;
 }
+
+#if 0
+int main(int argc, const char* argv[]) {
+    printf("Hello CLImage!\n");
+
+    if (argc > 1) {
+        auto input_path = std::filesystem::path(argv[1]);
+        auto input_dir = input_path.parent_path();
+
+        std::cout << "Processing: " << input_path.filename() << std::endl;
+
+        // Read the input file into an image object
+        auto inputImage = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
+
+        const auto rgb_image = demosaicImage(*inputImage);
+
+        rgb_image->write_png_file(input_path.replace_extension("_rgb.png").c_str());
+
+        std::cout << "done with inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
+
+        auto output_file = input_path.replace_extension(".dng").c_str();
+
+        inputImage->write_dng_file(output_file);
+    }
+}
+#endif
