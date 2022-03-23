@@ -1,9 +1,17 @@
+// Copyright (c) 2021-2022 Glass Imaging Inc.
+// Author: Fabio Riccardi <fabio@glass-imaging.com>
 //
-//  demosaic.cpp
-//  CLImageTest
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//  Created by Fabio Riccardi on 3/18/22.
+//    http://www.apache.org/licenses/LICENSE-2.0
 //
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <limits.h>
 #include <math.h>
@@ -382,12 +390,23 @@ void cam_xyz_coeff(float rgb_cam[3][3], float pre_mul[3], const float cam_xyz[3]
 gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage) {
     // From DNG Metadata
     const float color_matrix[3][3] = {
-        { 1.9435, -0.8992, -0.1936 },
-        { 0.1144,  0.8380,  0.0475 },
-        { 0.0136,  0.1203,  0.3553 }
+//        { 1.9435, -0.8992, -0.1936 },
+//        { 0.1144,  0.8380,  0.0475 },
+//        { 0.0136,  0.1203,  0.3553 }
+
+        // A CM
+//        {  0.8950195312, -0.3205566406, 0.04931640625  },
+//        { -0.5830078125,  1.609863281, -0.002197265625 },
+//        { -0.08374023438, 0.2768554688, 0.7937011719   }
+
+        // D65 CM
+        {  0.8059082031, -0.2783203125, -0.060546875 },
+        { -0.5290527344,  1.441650391,   0.05517578125 },
+        { -0.09350585938, 0.3002929688,  0.63671875 }
     };
     const float as_shot_neutral[3] = {
-        0.7380, 1, 0.5207
+        // 0.7380, 1, 0.5207
+        0.4731977819, 1, 0.7781155015
     };
 
     float cam_mul[3];
@@ -423,7 +442,7 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     auto minmax = std::minmax_element(std::begin(pre_mul), std::end(pre_mul));
 
     // TODO: This is objectionable: don't renormalize, just use the max value from metadata
-    float maximum = 0;
+    float maximum = 0x3fff;
     for (const auto p : rawImage.pixels()) {
         if (p > maximum) {
             maximum = p;
@@ -438,7 +457,7 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     }
     printf("scale_mul: %f, %f, %f, %f\n", scale_mul[0], scale_mul[1], scale_mul[2], scale_mul[3]);
 
-    const auto bayerPattern = BayerPattern::gbrg;
+    const auto bayerPattern = BayerPattern::rggb; // gbrg;
     const auto offsets = bayerOffsets[bayerPattern];
     gls::image<gls::luma_pixel_16> scaledRawImage = gls::image<gls::luma_pixel_16>(rawImage.width, rawImage.height);
     for (int y = 0; y < rawImage.height / 2; y++) {

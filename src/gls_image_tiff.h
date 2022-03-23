@@ -40,9 +40,13 @@ template <typename T>
 void write_tiff_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
                      tiff_compression compression, std::function<T*(int row)> row_pointer);
 
-template <typename T>
+void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
+                    std::function<bool(int width, int height)> image_allocator,
+                    std::function<void(int tiff_bitspersample, int tiff_samplesperpixel, int row, int strip_height,
+                                       uint8_t *tiff_buffer)> process_tiff_strip);
+
 void write_dng_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
-                    tiff_compression compression, std::function<T*(int row)> row_pointer);
+                    tiff_compression compression, std::function<uint16_t*(int row)> row_pointer);
 
 }  // namespace gls
 

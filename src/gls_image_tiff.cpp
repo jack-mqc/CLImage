@@ -28,6 +28,8 @@
 #include <iomanip>
 #include <iostream>
 
+#include "dng_lossless_jpeg.hpp"
+
 #include "auto_ptr.hpp"
 
 namespace gls {
@@ -145,12 +147,24 @@ void write_tiff_file(const std::string& filename, int width, int height, int pix
 #define TIFFTAG_FRAMERATE 51044
 #define TIFFTAG_REELNAME 51081
 
+#define TIFFTAG_PROFILENAME 50936
+#define TIFFTAG_PROFILELOOKTABLEDIMS 50981
+#define TIFFTAG_PROFILELOOKTABLEDATA 50982
+#define TIFFTAG_PROFILELOOKTABLEENCODING 51108
+#define TIFFTAG_DEFAULTUSERCROP 51125
+
 static const TIFFFieldInfo xtiffFieldInfo[] = {
     { TIFFTAG_FORWARDMATRIX1, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "ForwardMatrix1" },
     { TIFFTAG_FORWARDMATRIX2, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "ForwardMatrix2" },
     { TIFFTAG_TIMECODES, -1, -1, TIFF_BYTE, FIELD_CUSTOM, 1, 1, "TimeCodes" },
     { TIFFTAG_FRAMERATE, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "FrameRate" },
-    { TIFFTAG_REELNAME, -1, -1, TIFF_ASCII, FIELD_CUSTOM, 1, 0, "ReelName" }
+    { TIFFTAG_REELNAME, -1, -1, TIFF_ASCII, FIELD_CUSTOM, 1, 0, "ReelName" },
+
+    { TIFFTAG_PROFILENAME, -1, -1, TIFF_ASCII, FIELD_CUSTOM, 1, 0, "ProfileName" },
+    { TIFFTAG_PROFILELOOKTABLEDIMS, 3, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "ProfileLookTableDims" },
+    { TIFFTAG_PROFILELOOKTABLEDATA, -1, -1, TIFF_FLOAT, FIELD_CUSTOM, 1, 0, "ProfileLookTableData" },
+    { TIFFTAG_PROFILELOOKTABLEENCODING, -1, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "ProfileLookTableEncoding" },
+    { TIFFTAG_DEFAULTUSERCROP, 4, -1, TIFF_RATIONAL, FIELD_CUSTOM, 1, 0, "DefaultUserCrop" }
 };
 
 static TIFFExtendProc parent_extender = NULL;  // In case we want a chain of extensions
@@ -173,9 +187,79 @@ static void augment_libtiff_with_custom_tags( void )
     parent_extender = TIFFSetTagExtender( registerCustomTIFFTags );
 }
 
-template <typename T>
+void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
+                    std::function<bool(int width, int height)> image_allocator,
+                    std::function<void(int tiff_bitspersample, int tiff_samplesperpixel, int row, int strip_height,
+                                       uint8_t *tiff_buffer)> process_tiff_strip) {
+    augment_libtiff_with_custom_tags();
+
+    auto_ptr<TIFF> tif(TIFFOpen(filename.c_str(), "r"),
+                       [](TIFF *tif) { TIFFClose(tif); });
+
+    if (tif) {
+        uint32_t width = 0, height = 0;
+        TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width);
+        TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
+
+        printf("width: %d, height: %d\n", width, height);
+
+        uint16_t tiff_samplesperpixel = 0;
+        TIFFGetField(tif, TIFFTAG_SAMPLESPERPIXEL, &tiff_samplesperpixel);
+
+        printf("tiff_samplesperpixel: %d\n", tiff_samplesperpixel);
+
+//        uint16_t tiff_sampleformat = 0;
+//        TIFFGetField(tif, TIFFTAG_SAMPLEFORMAT, &tiff_sampleformat);
+//        if (tiff_sampleformat != SAMPLEFORMAT_UINT) {
+//            throw std::runtime_error("can not read sample format other than uint: " + std::to_string(tiff_sampleformat));
+//        }
+
+        uint16_t tiff_bitspersample=8;
+        TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &tiff_bitspersample);
+        if ((tiff_bitspersample != 8 && tiff_bitspersample != 16)) {
+            throw std::runtime_error("can not read sample with " + std::to_string(tiff_bitspersample) + " bits depth");
+        }
+        printf("tiff_bitspersample: %d\n", tiff_bitspersample);
+
+        auto allocation_successful = image_allocator(width, height);
+        if (allocation_successful) {
+            uint32_t* stripbytecounts = 0;
+            TIFFGetField(tif, TIFFTAG_STRIPBYTECOUNTS, &stripbytecounts);
+            printf("stripbytecounts: %d\n", stripbytecounts[0]);
+
+            uint32_t stripsize = stripbytecounts[0];
+            uint32_t stripcount = TIFFNumberOfStrips(tif);
+            tdata_t tiffbuf;
+
+            tiffbuf = _TIFFmalloc(stripsize);
+            for (int strip = 0; strip < (stripcount = TIFFNumberOfStrips(tif)); strip++) {
+                if (stripbytecounts[strip] > stripsize) {
+                    tiffbuf = _TIFFrealloc(tiffbuf, stripbytecounts[strip]);
+                    stripsize = stripbytecounts[strip];
+                }
+                if (TIFFReadRawStrip(tif, strip, tiffbuf, stripbytecounts[strip]) < 0) {
+                    throw std::runtime_error("Failed to encode TIFF strip.");
+                }
+                printf("read strip %d of %d - len %d\n", strip, stripcount, stripsize);
+
+                dng_stream stream((uint8_t *) tiffbuf, stripsize);
+                dng_spooler spooler;
+                uint32_t decodedSize = width * height * sizeof(uint16_t);
+                DecodeLosslessJPEG(stream, spooler,
+                                   decodedSize,
+                                   decodedSize,
+                                   false, stripsize);
+                process_tiff_strip(tiff_bitspersample, tiff_samplesperpixel, 0, height, (uint8_t *) spooler.data());
+            }
+            _TIFFfree(tiffbuf);
+        }
+    } else {
+        throw std::runtime_error("Couldn't read tiff file.");
+    }
+}
+
 void write_dng_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
-                     tiff_compression compression, std::function<T*(int row)> row_pointer) {
+                     tiff_compression compression, std::function<uint16_t*(int row)> row_pointer) {
     augment_libtiff_with_custom_tags();
 
     auto_ptr<TIFF> tiff(TIFFOpen(filename.c_str(), "w"),
@@ -183,20 +267,26 @@ void write_dng_file(const std::string& filename, int width, int height, int pixe
 
     if (tiff) {
         static const short bayerPatternDimensions[] = { 2, 2 };
-        static const unsigned char bayerPattern[] = "\01\02\00\01";
+        static const unsigned char bayerPattern[] = "\00\01\01\02"; // "\01\02\00\01";
         std::array<float, 9> color_matrix = {
-            1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553
+            // 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553
+
+            0.8059082031, -0.2783203125, -0.060546875,
+            -0.5290527344,  1.441650391,   0.05517578125,
+            -0.09350585938, 0.3002929688,  0.63671875
         };
-        std::array<float, 3> camera_multipliers = {
-            1.354894, 1.000000, 1.920234
-        };
+//        std::array<float, 3> camera_multipliers = {
+//            1.354894, 1.000000, 1.920234
+//        };
         const std::array<float, 3> as_shot_neutral = {
-            1.f / (camera_multipliers[0] / camera_multipliers[1]),
-            1.f,
-            1.f / (camera_multipliers[2] / camera_multipliers[1])
+//            1.f / (camera_multipliers[0] / camera_multipliers[1]),
+//            1.f,
+//            1.f / (camera_multipliers[2] / camera_multipliers[1])
+
+            0.4731977819, 1, 0.7781155015
         };
         const std::array<float, 4> black_level = {0, 0, 0, 0};
-        static const uint32_t white_level = 0x0fff;
+        static const uint32_t white_level = 15000; // 0x0fff;
 
         TIFFSetField(tiff, TIFFTAG_DNGVERSION, "\01\04\00\00");
         TIFFSetField(tiff, TIFFTAG_DNGBACKWARDVERSION, "\01\04\00\00");
@@ -246,9 +336,5 @@ void write_tiff_file<uint8_t>(const std::string& filename, int width, int height
 template
 void write_tiff_file<uint16_t>(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
                                tiff_compression compression, std::function<uint16_t*(int row)> row_pointer);
-
-template
-void write_dng_file<uint16_t>(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
-                              tiff_compression compression, std::function<uint16_t*(int row)> row_pointer);
 
 }  // namespace gls

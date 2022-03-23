@@ -23,17 +23,21 @@
 
 static const char* TAG = "RawPipeline Test";
 
+inline uint16_t clamp(int x) { return x < 0 ? 0 : x > 0xffff ? 0xffff : x; }
+
 int main(int argc, const char* argv[]) {
     printf("RawPipeline Test!\n");
 
     if (argc > 1) {
         auto input_path = std::filesystem::path(argv[1]);
-        auto input_dir = input_path.parent_path();
 
         LOG_INFO(TAG) << "Processing: " << input_path.filename() << std::endl;
 
-        // Read the input file into an image object
-        auto inputImage = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
+        const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string());
+
+        inputImage->write_tiff_file(input_path.replace_extension(".tiff").c_str());
+
+        LOG_INFO(TAG) << "done with inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
 
         const auto rgb_image = demosaicImage(*inputImage);
 
@@ -41,7 +45,7 @@ int main(int argc, const char* argv[]) {
 
         LOG_INFO(TAG) << "done with inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
 
-        auto output_file = input_path.replace_extension(".dng").c_str();
+        auto output_file = input_path.replace_extension("_my.dng").c_str();
 
         inputImage->write_dng_file(output_file);
     }
