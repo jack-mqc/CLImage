@@ -28,11 +28,35 @@
 #include <iomanip>
 #include <iostream>
 
-#include "dng_lossless_jpeg.hpp"
+#include "gls_dng_lossless_jpeg.hpp"
 
-#include "auto_ptr.hpp"
+#include "gls_auto_ptr.hpp"
 
 namespace gls {
+
+void readTiffImageData(TIFF *tif, int height, int tiff_bitspersample, int tiff_samplesperpixel,
+                       std::function<void(int tiff_bitspersample, int tiff_samplesperpixel, int row, int strip_height,
+                                          uint8_t *tiff_buffer)> process_tiff_strip) {
+    auto_ptr<uint8_t> tiffbuf((uint8_t*)_TIFFmalloc(TIFFStripSize(tif)),
+                              [](uint8_t* tiffbuf) { _TIFFfree(tiffbuf); });
+    if (tiffbuf) {
+        uint32_t rowsperstrip = 0;
+        TIFFGetField(tif, TIFFTAG_ROWSPERSTRIP, &rowsperstrip);
+
+        for (uint32_t row = 0; row < height; row += rowsperstrip) {
+            uint32_t nrow = (row + rowsperstrip > height) ? (height - row) : rowsperstrip;
+            tstrip_t strip = TIFFComputeStrip(tif, row, 0);
+
+            if ((TIFFReadEncodedStrip(tif, strip, tiffbuf, -1)) < 0) {
+                throw std::runtime_error("Failed to encode TIFF strip.");
+            }
+
+            process_tiff_strip(tiff_bitspersample, tiff_samplesperpixel, row, nrow, tiffbuf);
+        }
+    } else {
+        throw std::runtime_error("Error allocating memory buffer for TIFF strip.");
+    }
+}
 
 void read_tiff_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
                     std::function<bool(int width, int height)> image_allocator,
@@ -51,38 +75,19 @@ void read_tiff_file(const std::string& filename, int pixel_channels, int pixel_b
 
         uint16_t tiff_sampleformat;
         TIFFGetField(tif, TIFFTAG_SAMPLEFORMAT, &tiff_sampleformat);
-
-        uint16_t tiff_bitspersample=8;
-        TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &tiff_bitspersample);
-
         if (tiff_sampleformat != SAMPLEFORMAT_UINT) {
             throw std::runtime_error("can not read sample format other than uint");
         }
 
+        uint16_t tiff_bitspersample=8;
+        TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &tiff_bitspersample);
         if ((tiff_bitspersample != 8 && tiff_bitspersample != 16)) {
             throw std::runtime_error("can not read sample with " + std::to_string(tiff_bitspersample) + " bits depth");
         }
 
         auto allocation_successful = image_allocator(width, height);
         if (allocation_successful) {
-            auto_ptr<uint8_t> tiffbuf((uint8_t*)_TIFFmalloc(TIFFStripSize(tif)),
-                                      [](uint8_t* tiffbuf) { _TIFFfree(tiffbuf); });
-            if (tiffbuf) {
-                uint32_t rowsperstrip = 0;
-                TIFFGetField(tif, TIFFTAG_ROWSPERSTRIP, &rowsperstrip);
-
-                for (uint32_t row = 0; row < height; row += rowsperstrip) {
-                    uint32_t nrow = (row + rowsperstrip > height) ? (height - row) : rowsperstrip;
-                    tstrip_t strip = TIFFComputeStrip(tif, row, 0);
-
-                    if ((TIFFReadEncodedStrip(tif, strip, tiffbuf, -1)) < 0) {
-                        throw std::runtime_error("Failed to encode TIFF strip.");
-                    }
-                    process_tiff_strip(tiff_bitspersample, tiff_samplesperpixel, row, nrow, tiffbuf);
-                }
-            } else {
-                throw std::runtime_error("Error allocating memory buffer for TIFF strip.");
-            }
+            readTiffImageData(tif, height, tiff_bitspersample, tiff_samplesperpixel, process_tiff_strip);
         } else {
             throw std::runtime_error("Couldn't allocate image storage");
         }
@@ -200,58 +205,71 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
         uint32_t width = 0, height = 0;
         TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width);
         TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
-
         printf("width: %d, height: %d\n", width, height);
 
         uint16_t tiff_samplesperpixel = 0;
         TIFFGetField(tif, TIFFTAG_SAMPLESPERPIXEL, &tiff_samplesperpixel);
-
         printf("tiff_samplesperpixel: %d\n", tiff_samplesperpixel);
 
-//        uint16_t tiff_sampleformat = 0;
-//        TIFFGetField(tif, TIFFTAG_SAMPLEFORMAT, &tiff_sampleformat);
-//        if (tiff_sampleformat != SAMPLEFORMAT_UINT) {
-//            throw std::runtime_error("can not read sample format other than uint: " + std::to_string(tiff_sampleformat));
-//        }
+        uint16_t tiff_sampleformat = SAMPLEFORMAT_UINT;
+        TIFFGetFieldDefaulted(tif, TIFFTAG_SAMPLEFORMAT, &tiff_sampleformat);
+        if (tiff_sampleformat != SAMPLEFORMAT_UINT) {
+            throw std::runtime_error("can not read sample format other than uint: " + std::to_string(tiff_sampleformat));
+        }
 
-        uint16_t tiff_bitspersample=8;
+        uint16_t tiff_bitspersample = 0;
         TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &tiff_bitspersample);
         if ((tiff_bitspersample != 8 && tiff_bitspersample != 16)) {
             throw std::runtime_error("can not read sample with " + std::to_string(tiff_bitspersample) + " bits depth");
         }
         printf("tiff_bitspersample: %d\n", tiff_bitspersample);
 
+        uint16_t compression = 0;
+        TIFFGetFieldDefaulted(tif, TIFFTAG_COMPRESSION, &compression);
+        if ((compression != COMPRESSION_NONE && compression != COMPRESSION_JPEG)) {
+            throw std::runtime_error("only lossles JPEG compression is supported for DNG. (" + std::to_string(compression) + ")");
+        }
+        printf("compression: %d\n", compression);
+
         auto allocation_successful = image_allocator(width, height);
         if (allocation_successful) {
-            uint32_t* stripbytecounts = 0;
-            TIFFGetField(tif, TIFFTAG_STRIPBYTECOUNTS, &stripbytecounts);
-            printf("stripbytecounts: %d\n", stripbytecounts[0]);
+            if (compression == COMPRESSION_JPEG) {
+                // DNG data is losslessly compressed
 
-            uint32_t stripsize = stripbytecounts[0];
-            uint32_t stripcount = TIFFNumberOfStrips(tif);
-            tdata_t tiffbuf;
+                uint32_t* stripbytecounts = 0;
+                TIFFGetField(tif, TIFFTAG_STRIPBYTECOUNTS, &stripbytecounts);
+                printf("stripbytecounts: %d\n", stripbytecounts[0]);
 
-            tiffbuf = _TIFFmalloc(stripsize);
-            for (int strip = 0; strip < (stripcount = TIFFNumberOfStrips(tif)); strip++) {
-                if (stripbytecounts[strip] > stripsize) {
-                    tiffbuf = _TIFFrealloc(tiffbuf, stripbytecounts[strip]);
-                    stripsize = stripbytecounts[strip];
+                // We only expect one single big strip, but you never know
+                uint32_t stripsize = stripbytecounts[0];
+
+                tdata_t tiffbuf = _TIFFmalloc(stripsize);
+                for (int strip = 0; strip < TIFFNumberOfStrips(tif); strip++) {
+                    if (stripbytecounts[strip] > stripsize) {
+                        tiffbuf = _TIFFrealloc(tiffbuf, stripbytecounts[strip]);
+                        stripsize = stripbytecounts[strip];
+                    }
+                    if (TIFFReadRawStrip(tif, strip, tiffbuf, stripbytecounts[strip]) < 0) {
+                        throw std::runtime_error("Failed to encode TIFF strip.");
+                    }
+
+                    // Used Adobe's version of libjpeg lossless codec
+                    dng_stream stream((uint8_t *) tiffbuf, stripsize);
+                    dng_spooler spooler;
+                    uint32_t decodedSize = width * height * sizeof(uint16_t);
+                    DecodeLosslessJPEG(stream, spooler,
+                                       decodedSize,
+                                       decodedSize,
+                                       false, stripsize);
+
+                    process_tiff_strip(tiff_bitspersample, tiff_samplesperpixel, 0, height, (uint8_t *) spooler.data());
                 }
-                if (TIFFReadRawStrip(tif, strip, tiffbuf, stripbytecounts[strip]) < 0) {
-                    throw std::runtime_error("Failed to encode TIFF strip.");
-                }
-                printf("read strip %d of %d - len %d\n", strip, stripcount, stripsize);
+                _TIFFfree(tiffbuf);
+            } else {
+                // No compreession, read as a plain TIFF file
 
-                dng_stream stream((uint8_t *) tiffbuf, stripsize);
-                dng_spooler spooler;
-                uint32_t decodedSize = width * height * sizeof(uint16_t);
-                DecodeLosslessJPEG(stream, spooler,
-                                   decodedSize,
-                                   decodedSize,
-                                   false, stripsize);
-                process_tiff_strip(tiff_bitspersample, tiff_samplesperpixel, 0, height, (uint8_t *) spooler.data());
+                readTiffImageData(tif, height, tiff_bitspersample, tiff_samplesperpixel, process_tiff_strip);
             }
-            _TIFFfree(tiffbuf);
         }
     } else {
         throw std::runtime_error("Couldn't read tiff file.");
