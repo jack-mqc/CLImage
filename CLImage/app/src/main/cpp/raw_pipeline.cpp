@@ -20,6 +20,7 @@
 #include "gls_image.hpp"
 
 #include "demosaic.hpp"
+#include "gls_tiff_metadata.hpp"
 
 static const char* TAG = "RawPipeline Test";
 
@@ -33,7 +34,8 @@ int main(int argc, const char* argv[]) {
 
         LOG_INFO(TAG) << "Processing: " << input_path.filename() << std::endl;
 
-        const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string());
+        gls::tiff_metadata metadata;
+        const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &metadata);
 
         inputImage->write_tiff_file(input_path.replace_extension(".tiff").c_str());
 
@@ -47,6 +49,6 @@ int main(int argc, const char* argv[]) {
 
         auto output_file = input_path.replace_extension("_my.dng").c_str();
 
-        inputImage->write_dng_file(output_file);
+        inputImage->write_dng_file(output_file, /*compression=*/ gls::JPEG);
     }
 }
