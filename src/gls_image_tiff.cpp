@@ -102,19 +102,17 @@ void write_tiff_file(const std::string& filename, int width, int height, int pix
     auto_ptr<TIFF> tif(TIFFOpen(filename.c_str(), "w"),
                        [](TIFF *tif) { TIFFClose(tif); });
     if (tif) {
-        uint16_t frame_width = width;
-        uint16_t frame_height = height;
-        uint32_t rowsperstrip = (uint32_t)-1;
-
-        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, frame_width);
-        TIFFSetField(tif, TIFFTAG_IMAGELENGTH, frame_height);
+        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, width);
+        TIFFSetField(tif, TIFFTAG_IMAGELENGTH, height);
         TIFFSetField(tif, TIFFTAG_COMPRESSION, compression);
         TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
         TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, pixel_channels > 2 ? PHOTOMETRIC_RGB : PHOTOMETRIC_MINISBLACK);
         TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, pixel_bit_depth);
         TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, pixel_channels);
-        rowsperstrip = TIFFDefaultStripSize(tif, rowsperstrip);
+
+        uint32_t rowsperstrip = TIFFDefaultStripSize(tif, -1);
         TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, rowsperstrip);
+
         TIFFSetField(tif, TIFFTAG_FILLORDER, FILLORDER_MSB2LSB);
         TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
         TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
@@ -123,12 +121,12 @@ void write_tiff_file(const std::string& filename, int width, int height, int pix
                             [](T* tiffbuf) { _TIFFfree(tiffbuf); });
 
         if (tiffbuf) {
-            for (int row = 0; (row < frame_height); row += rowsperstrip) {
-                uint32_t nrow = (row + rowsperstrip) > frame_height ? nrow = frame_height - row : rowsperstrip;
+            for (int row = 0; (row < height); row += rowsperstrip) {
+                uint32_t nrow = (row + rowsperstrip) > height ? nrow = height - row : rowsperstrip;
                 tstrip_t strip = TIFFComputeStrip(tif, row, 0);
                 tsize_t bi = 0;
                 for (int y = 0; y < nrow; ++y) {
-                    for (int x = 0; x < frame_width; ++x) {
+                    for (int x = 0; x < width; ++x) {
                         for (int c = 0; c < pixel_channels; c++) {
                             tiffbuf[bi++] = row_pointer(row + y)[pixel_channels * x + c];
                         }
@@ -278,12 +276,16 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
 
 void write_dng_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
                      tiff_compression compression, std::function<uint16_t*(int row)> row_pointer) {
+    if (compression != COMPRESSION_JPEG && compression != COMPRESSION_NONE) {
+        throw std::runtime_error("Only lossles JPEG compression is supported for DNG files. (" + std::to_string(compression) + ")");
+    }
+
     augment_libtiff_with_custom_tags();
 
-    auto_ptr<TIFF> tiff(TIFFOpen(filename.c_str(), "w"),
+    auto_ptr<TIFF> tif(TIFFOpen(filename.c_str(), "w"),
                        [](TIFF *tif) { TIFFClose(tif); });
 
-    if (tiff) {
+    if (tif) {
         static const short bayerPatternDimensions[] = { 2, 2 };
         static const unsigned char bayerPattern[] = "\00\01\01\02"; // "\01\02\00\01";
         std::array<float, 9> color_matrix = {
@@ -306,42 +308,75 @@ void write_dng_file(const std::string& filename, int width, int height, int pixe
         const std::array<float, 4> black_level = {0, 0, 0, 0};
         static const uint32_t white_level = 15000; // 0x0fff;
 
-        TIFFSetField(tiff, TIFFTAG_DNGVERSION, "\01\04\00\00");
-        TIFFSetField(tiff, TIFFTAG_DNGBACKWARDVERSION, "\01\04\00\00");
-        TIFFSetField(tiff, TIFFTAG_SUBFILETYPE, 0);
-        TIFFSetField(tiff, TIFFTAG_COMPRESSION, COMPRESSION_NONE);
-        TIFFSetField(tiff, TIFFTAG_BITSPERSAMPLE, 16);
-        TIFFSetField(tiff, TIFFTAG_ROWSPERSTRIP, 1);
-        TIFFSetField(tiff, TIFFTAG_ORIENTATION, ORIENTATION_LEFTTOP);  // Mirrored data
-        TIFFSetField(tiff, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_CFA);
-        TIFFSetField(tiff, TIFFTAG_SAMPLESPERPIXEL, 1);
-        TIFFSetField(tiff, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-        TIFFSetField(tiff, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
-        TIFFSetField(tiff, TIFFTAG_CFAREPEATPATTERNDIM, &bayerPatternDimensions);
-        TIFFSetField(tiff, TIFFTAG_CFAPATTERN, 4, bayerPattern);
+        TIFFSetField(tif, TIFFTAG_DNGVERSION, "\01\04\00\00");
+        TIFFSetField(tif, TIFFTAG_DNGBACKWARDVERSION, "\01\04\00\00");
+        TIFFSetField(tif, TIFFTAG_SUBFILETYPE, 0);
+        TIFFSetField(tif, TIFFTAG_COMPRESSION, compression);
+        TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 16);
+        TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_LEFTTOP);  // Mirrored data
+        TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_CFA);
+        TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
+        TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+        TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
+        TIFFSetField(tif, TIFFTAG_CFAREPEATPATTERNDIM, &bayerPatternDimensions);
+        TIFFSetField(tif, TIFFTAG_CFAPATTERN, 4, bayerPattern);
 
-        TIFFSetField(tiff, TIFFTAG_MAKE, "Glass");
-        TIFFSetField(tiff, TIFFTAG_UNIQUECAMERAMODEL, "Glass 1");
+        TIFFSetField(tif, TIFFTAG_MAKE, "Glass");
+        TIFFSetField(tif, TIFFTAG_UNIQUECAMERAMODEL, "Glass 1");
 
-        TIFFSetField(tiff, TIFFTAG_COLORMATRIX1, 9, &color_matrix);
-        TIFFSetField(tiff, TIFFTAG_CALIBRATIONILLUMINANT1, 21); // D65
-        TIFFSetField(tiff, TIFFTAG_ASSHOTNEUTRAL, 3, &as_shot_neutral);
+        TIFFSetField(tif, TIFFTAG_COLORMATRIX1, 9, &color_matrix);
+        TIFFSetField(tif, TIFFTAG_CALIBRATIONILLUMINANT1, 21); // D65
+        TIFFSetField(tif, TIFFTAG_ASSHOTNEUTRAL, 3, &as_shot_neutral);
 
-        TIFFSetField(tiff, TIFFTAG_CFALAYOUT, 1); // Rectangular (or square) layout
-        TIFFSetField(tiff, TIFFTAG_CFAPLANECOLOR, 3, "\00\01\02"); // RGB https://www.awaresystems.be/imaging/tiff/tifftags/cfaplanecolor.html
-        TIFFSetField(tiff, TIFFTAG_BAYERGREENSPLIT, 0);
+        TIFFSetField(tif, TIFFTAG_CFALAYOUT, 1); // Rectangular (or square) layout
+        TIFFSetField(tif, TIFFTAG_CFAPLANECOLOR, 3, "\00\01\02"); // RGB https://www.awaresystems.be/imaging/tiff/tifftags/cfaplanecolor.html
+        TIFFSetField(tif, TIFFTAG_BAYERGREENSPLIT, 0);
 
-        TIFFSetField(tiff, TIFFTAG_BLACKLEVEL, 4, &black_level);
-        TIFFSetField(tiff, TIFFTAG_WHITELEVEL, 1, &white_level);
+        TIFFSetField(tif, TIFFTAG_BLACKLEVEL, 4, &black_level);
+        TIFFSetField(tif, TIFFTAG_WHITELEVEL, 1, &white_level);
 
-        TIFFSetField(tiff, TIFFTAG_IMAGEWIDTH, width);
-        TIFFSetField(tiff, TIFFTAG_IMAGELENGTH, height);
+        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, width);
+        TIFFSetField(tif, TIFFTAG_IMAGELENGTH, height);
 
-        for (int row = 0; row < height; row++) {
-            TIFFWriteScanline(tiff, row_pointer(row), row, 0);
+        if (compression == COMPRESSION_JPEG) {
+            std::vector<uint16_t> outputBuffer(height * width);
+            dng_stream out_stream((uint8_t*) outputBuffer.data(), outputBuffer.size() * sizeof(uint16_t));
+
+            EncodeLosslessJPEG(row_pointer(0), height, width,
+                               /*srcChannels=*/ 1, /*srcBitDepth=*/ 16,
+                               /*srcRowStep=*/ width, /*srcColStep=*/ 1, out_stream);
+
+            if (TIFFWriteRawStrip(tif, 0, outputBuffer.data(), out_stream.Position()) < 0) {
+                throw std::runtime_error("Failed to write TIFF data.");
+            }
+            printf("Wrote %ld compressed bytes\n", out_stream.Position());
+        } else {
+            uint32_t rowsperstrip = height;
+
+            TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, rowsperstrip);
+
+            auto_ptr<uint16_t> tiffbuf((uint16_t*)_TIFFmalloc(TIFFStripSize(tif)),
+                                [](uint16_t* tiffbuf) { _TIFFfree(tiffbuf); });
+
+            for (int row = 0; (row < height); row += rowsperstrip) {
+                uint32_t nrow = (row + rowsperstrip) > height ? nrow = height - row : rowsperstrip;
+                tstrip_t strip = TIFFComputeStrip(tif, row, 0);
+                tsize_t bi = 0;
+                for (int y = 0; y < nrow; ++y) {
+                    for (int x = 0; x < width; ++x) {
+                        for (int c = 0; c < pixel_channels; c++) {
+                            tiffbuf[bi++] = row_pointer(row + y)[pixel_channels * x + c];
+                        }
+                    }
+                }
+                if (TIFFWriteEncodedStrip(tif, strip, tiffbuf, bi * sizeof(uint16_t)) < 0) {
+                    throw std::runtime_error("Failed to encode TIFF strip.");
+                }
+                printf("Wrote %d rows\n", nrow);
+            }
         }
 
-        TIFFWriteDirectory(tiff);
+        TIFFWriteDirectory(tif);
     } else {
         throw std::runtime_error("Couldn't open DNG file for writing.");
     }

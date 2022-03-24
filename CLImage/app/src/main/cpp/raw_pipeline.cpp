@@ -47,6 +47,6 @@ int main(int argc, const char* argv[]) {
 
         auto output_file = input_path.replace_extension("_my.dng").c_str();
 
-        inputImage->write_dng_file(output_file);
+        inputImage->write_dng_file(output_file, /*compression=*/ gls::JPEG);
     }
 }
