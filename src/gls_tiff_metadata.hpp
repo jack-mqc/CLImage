@@ -43,7 +43,11 @@ void writeVectorMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& 
         const auto value = std::get<std::vector<T>>(entry->second);
         const TIFFField* tf = TIFFFieldWithName(tif, key.c_str());
         if (tf) {
-            TIFFSetField(tif, TIFFFieldTag(tf), value.size(), value.data());
+            if (TIFFFieldWriteCount(tf) < 0) {
+                TIFFSetField(tif, TIFFFieldTag(tf), (uint16_t) value.size(), value.data());
+            } else {
+                TIFFSetField(tif, TIFFFieldTag(tf), value.data());
+            }
         }
     }
 }

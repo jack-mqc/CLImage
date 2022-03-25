@@ -22,7 +22,6 @@ namespace gls {
 struct TiffFieldInfo {
     const ttag_t        field_tag;          /* field's tag */
     const int           field_readcount;    /* read count/TIFF_VARIABLE/TIFF_SPP */
-    const int           field_writecount;   /* write count/TIFF_VARIABLE */
     const TIFFDataType  field_type;         /* type of associated data */
     const char*         field_name;         /* ASCII name */
 };
@@ -106,7 +105,6 @@ void getAllTIFFTags(TIFF* tif, tiff_metadata* metadata) {
             TiffFieldInfo fi = {
                 .field_tag = TIFFFieldTag(tfi),
                 .field_readcount = TIFFFieldReadCount(tfi),
-                .field_writecount = TIFFFieldWriteCount(tfi),
                 .field_type = TIFFFieldDataType(tfi),
                 .field_name = TIFFFieldName(tfi),
             };

@@ -359,23 +359,17 @@ void write_dng_file(const std::string& filename, int width, int height, int pixe
         TIFFSetField(tif, TIFFTAG_UNIQUECAMERAMODEL, "Glass 1");
 
         if (metadata) {
-            const auto CFARepeatPatternDim = std::get<std::vector<uint16_t>>((*metadata)["CFARepeatPatternDim"]);
-            TIFFSetField(tif, TIFFTAG_CFAREPEATPATTERNDIM, CFARepeatPatternDim.data());
-
+            writeVectorMetadata<uint16_t>(tif, metadata, "CFARepeatPatternDim");
             writeVectorMetadata<uint8_t>(tif, metadata, "CFAPattern");
 
             writeVectorMetadata<float>(tif, metadata, "ColorMatrix1");
             writeVectorMetadata<float>(tif, metadata, "ColorMatrix2");
+            writeVectorMetadata<float>(tif, metadata, "AsShotNeutral");
 
             writeScalarMetadata<uint16_t>(tif, metadata, "CalibrationIlluminant1");
             writeScalarMetadata<uint16_t>(tif, metadata, "CalibrationIlluminant2");
 
-            writeVectorMetadata<float>(tif, metadata, "AsShotNeutral");
-
-            // writeVectorMetadata<uint16_t>(tif, metadata, "BlackLevelRepeatDim");
-            const auto BlackLevelRepeatDim = std::get<std::vector<uint16_t>>((*metadata)["BlackLevelRepeatDim"]);
-            TIFFSetField(tif, TIFFTAG_BLACKLEVELREPEATDIM, BlackLevelRepeatDim.data());
-
+            writeVectorMetadata<uint16_t>(tif, metadata, "BlackLevelRepeatDim");
             writeVectorMetadata<float>(tif, metadata, "BlackLevel");
             writeVectorMetadata<uint32_t>(tif, metadata, "WhiteLevel");
 
