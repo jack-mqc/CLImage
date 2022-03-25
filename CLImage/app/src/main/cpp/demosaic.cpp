@@ -391,14 +391,13 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
                                                         const gls::tiff_metadata& metadata) {
     const auto color_matrix = std::get<std::vector<float>>(metadata.find("ColorMatrix1")->second);
     const auto as_shot_neutral = std::get<std::vector<float>>(metadata.find("AsShotNeutral")->second);
-    // const auto black_level = std::get<std::vector<float>>(metadata.find("BlackLevel")->second)[0];
+    // const auto black_level = std::get<std::vector<float>>(metadata.find("BlackLevel")->second)[0];  // TODO: use this
     const float white_level = std::get<std::vector<uint32_t>>(metadata.find("WhiteLevel")->second)[0];
     const auto cfa_pattern = std::get<std::vector<uint8_t>>(metadata.find("CFAPattern")->second);
 
-    uint32_t cfa_pattern_32 = *((uint32_t *) cfa_pattern.data());
-    const auto bayerPattern = cfa_pattern_32 == 0x0112 ? BayerPattern::rggb
-                            : cfa_pattern_32 == 0x2110 ? BayerPattern::bggr
-                            : cfa_pattern_32 == 0x1021 ? BayerPattern::grbg
+    const auto bayerPattern = std::memcmp(cfa_pattern.data(), "\00\01\01\02", 4) == 0 ? BayerPattern::rggb
+                            : std::memcmp(cfa_pattern.data(), "\02\01\01\00", 4) == 0 ? BayerPattern::bggr
+                            : std::memcmp(cfa_pattern.data(), "\01\00\02\01", 4) == 0 ? BayerPattern::grbg
                             : BayerPattern::gbrg;
 
     float cam_mul[3];
