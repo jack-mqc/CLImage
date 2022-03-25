@@ -26,21 +26,6 @@ static const char* TAG = "RawPipeline Test";
 
 inline uint16_t clamp(int x) { return x < 0 ? 0 : x > 0xffff ? 0xffff : x; }
 
-//static const short bayerPatternDimensions[] = { 2, 2 };
-//static const unsigned char bayerPattern[] = "\00\01\01\02"; // "\01\02\00\01";
-//
-//std::array<float, 9> color_matrix = {
-//    1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553
-//};
-//std::array<float, 3> camera_multipliers = {
-//    1.354894, 1.000000, 1.920234
-//};
-//const std::array<float, 3> as_shot_neutral = {
-//    1.f / (camera_multipliers[0] / camera_multipliers[1]),
-//    1.f,
-//    1.f / (camera_multipliers[2] / camera_multipliers[1])
-//};
-
 int main(int argc, const char* argv[]) {
     printf("RawPipeline Test!\n");
 
@@ -49,17 +34,17 @@ int main(int argc, const char* argv[]) {
 
         LOG_INFO(TAG) << "Processing: " << input_path.filename() << std::endl;
 
-//        gls::tiff_metadata metadata;
-//        const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &metadata);
-
         gls::tiff_metadata metadata;
-        metadata.insert({ "ColorMatrix1", std::vector<float>{ 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553 } });
-        metadata.insert({ "AsShotNeutral", std::vector<float>{ 0.7380, 1, 0.5207 } });
-        metadata.insert({ "CFARepeatPatternDim", std::vector<uint16_t>{ 2, 2 } });
-        metadata.insert({ "CFAPattern", std::vector<uint8_t>{ 1, 2, 0, 1 } });
-        metadata.insert({ "BlackLevel", std::vector<float>{ 0 } });
-        metadata.insert({ "WhiteLevel", std::vector<uint32_t>{ 0x0fff } });
-        const auto inputImage = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
+        const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &metadata);
+
+//        gls::tiff_metadata metadata;
+//        metadata.insert({ "ColorMatrix1", std::vector<float>{ 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553 } });
+//        metadata.insert({ "AsShotNeutral", std::vector<float>{ 0.7380, 1, 0.5207 } });
+//        metadata.insert({ "CFARepeatPatternDim", std::vector<uint16_t>{ 2, 2 } });
+//        metadata.insert({ "CFAPattern", std::vector<uint8_t>{ 1, 2, 0, 1 } });
+//        metadata.insert({ "BlackLevel", std::vector<float>{ 0 } });
+//        metadata.insert({ "WhiteLevel", std::vector<uint32_t>{ 0x0fff } });
+//        const auto inputImage = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
 
         LOG_INFO(TAG) << "read inputImage of size: " << inputImage->width << " x " << inputImage->height << std::endl;
 

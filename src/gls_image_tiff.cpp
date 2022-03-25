@@ -279,22 +279,24 @@ void write_dng_file(const std::string& filename, int width, int height, int pixe
         TIFFSetField(tif, TIFFTAG_UNIQUECAMERAMODEL, "Glass 1");
 
         if (metadata) {
-            writeVectorMetadata<uint16_t>(tif, metadata, "CFARepeatPatternDim");
-            writeVectorMetadata<uint8_t>(tif, metadata, "CFAPattern");
+            setMetadata(tif, metadata, "DateTime");
 
-            writeVectorMetadata<float>(tif, metadata, "ColorMatrix1");
-            writeVectorMetadata<float>(tif, metadata, "ColorMatrix2");
-            writeVectorMetadata<float>(tif, metadata, "AsShotNeutral");
+            setMetadata(tif, metadata, "CFARepeatPatternDim");
+            setMetadata(tif, metadata, "CFAPattern");
 
-            writeScalarMetadata<uint16_t>(tif, metadata, "CalibrationIlluminant1");
-            writeScalarMetadata<uint16_t>(tif, metadata, "CalibrationIlluminant2");
+            setMetadata(tif, metadata, "ColorMatrix1");
+            setMetadata(tif, metadata, "ColorMatrix2");
+            setMetadata(tif, metadata, "AsShotNeutral");
 
-            writeVectorMetadata<uint16_t>(tif, metadata, "BlackLevelRepeatDim");
-            writeVectorMetadata<float>(tif, metadata, "BlackLevel");
-            writeVectorMetadata<uint32_t>(tif, metadata, "WhiteLevel");
+            setMetadata(tif, metadata, "CalibrationIlluminant1");
+            setMetadata(tif, metadata, "CalibrationIlluminant2");
 
-            writeScalarMetadata<uint32_t>(tif, metadata, "BayerGreenSplit");
-            writeScalarMetadata<float>(tif, metadata, "BaselineExposure");
+            setMetadata(tif, metadata, "BlackLevelRepeatDim");
+            setMetadata(tif, metadata, "BlackLevel");
+            setMetadata(tif, metadata, "WhiteLevel");
+
+            setMetadata(tif, metadata, "BayerGreenSplit");
+            setMetadata(tif, metadata, "BaselineExposure");
         }
 
         if (compression == COMPRESSION_JPEG) {

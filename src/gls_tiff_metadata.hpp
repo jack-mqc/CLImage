@@ -38,33 +38,7 @@ void getAllTIFFTags(TIFF* tif, tiff_metadata* metadata);
 
 void augment_libtiff_with_custom_tags();
 
-template <typename T>
-void writeVectorMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& key) {
-    const auto entry = metadata->find(key);
-    if (entry != metadata->end()) {
-        const auto value = std::get<std::vector<T>>(entry->second);
-        const TIFFField* tf = TIFFFieldWithName(tif, key.c_str());
-        if (tf) {
-            if (TIFFFieldWriteCount(tf) < 0) {
-                TIFFSetField(tif, TIFFFieldTag(tf), (uint16_t) value.size(), value.data());
-            } else {
-                TIFFSetField(tif, TIFFFieldTag(tf), value.data());
-            }
-        }
-    }
-}
-
-template <typename T>
-void writeScalarMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& key) {
-    const auto entry = metadata->find(key);
-    if (entry != metadata->end()) {
-        const auto value = std::get<T>(entry->second);
-        const TIFFField* tf = TIFFFieldWithName(tif, key.c_str());
-        if (tf) {
-            TIFFSetField(tif, TIFFFieldTag(tf), value);
-        }
-    }
-}
+void setMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& key);
 
 #define TIFFTAG_DNG_IMAGEWIDTH 61441
 #define TIFFTAG_DNG_IMAGEHEIGHT 61442

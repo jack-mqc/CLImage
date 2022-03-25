@@ -27,23 +27,25 @@ struct TiffFieldInfo {
 };
 
 template<class T>
-bool getMetaData(TIFF* tif, const TiffFieldInfo& fi, tiff_metadata* metadata, const std::string& key) {
-    if (fi.field_readcount == TIFF_VARIABLE2 || fi.field_readcount == TIFF_VARIABLE || fi.field_readcount > 1) {
+bool getMetaData(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata, const std::string& key) {
+    const auto field_tag = TIFFFieldTag(tf);
+    const auto field_readcount = TIFFFieldReadCount(tf);
 
+    if (field_readcount == TIFF_VARIABLE2 || field_readcount == TIFF_VARIABLE || field_readcount > 1) {
         size_t count = 0;
         T* data;
 
-        if (fi.field_readcount == TIFF_VARIABLE) {
+        if (field_readcount == TIFF_VARIABLE) {
             uint16_t gotcount = 0;
-            TIFFGetField(tif, fi.field_tag, &gotcount, &data);
+            TIFFGetField(tif, field_tag, &gotcount, &data);
             count = gotcount;
-        } else if (fi.field_readcount == TIFF_VARIABLE2) {
+        } else if (field_readcount == TIFF_VARIABLE2) {
             uint32_t gotcount = 0;
-            TIFFGetField(tif, fi.field_tag, &gotcount, &data);
+            TIFFGetField(tif, field_tag, &gotcount, &data);
             count = gotcount;
         } else {
-            TIFFGetField(tif, fi.field_tag, &data);
-            count = fi.field_readcount;
+            TIFFGetField(tif, field_tag, &data);
+            count = field_readcount;
         }
 
         std::vector<T> values;
@@ -70,9 +72,9 @@ bool getMetaData(TIFF* tif, const TiffFieldInfo& fi, tiff_metadata* metadata, co
 
         metadata->insert({ key, values });
         return true;
-    } else if (fi.field_readcount == 1) {
+    } else if (field_readcount == 1) {
         T data;
-        TIFFGetField(tif, fi.field_tag, &data);
+        TIFFGetField(tif, field_tag, &data);
 
         std::cout << "New metadata scalar " << key << ": " << data << std::endl;
 
@@ -82,10 +84,11 @@ bool getMetaData(TIFF* tif, const TiffFieldInfo& fi, tiff_metadata* metadata, co
     return false;
 }
 
-bool getMetaDataString(TIFF* tif, const TiffFieldInfo& fi, tiff_metadata* metadata, const std::string& key) {
-    if (fi.field_readcount > 1) {
+bool getMetaDataString(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata, const std::string& key) {
+    const auto field_readcount = TIFFFieldReadCount(tf);
+    if (field_readcount > 1) {
         char* data;
-        TIFFGetField(tif, fi.field_tag, &data);
+        TIFFGetField(tif, TIFFFieldTag(tf), &data);
 
         std::cout << "New metadata string " << key << ": " << data << std::endl;
 
@@ -100,68 +103,63 @@ void getAllTIFFTags(TIFF* tif, tiff_metadata* metadata) {
         int cnt = TIFFGetTagListCount(tif);
         for (int i = 0; i < cnt; i++) {
             ttag_t tag = TIFFGetTagListEntry(tif, i);
-            const TIFFField* tfi = TIFFFieldWithTag(tif, tag);
+            const TIFFField* tf = TIFFFieldWithTag(tif, tag);
 
-            TiffFieldInfo fi = {
-                .field_tag = TIFFFieldTag(tfi),
-                .field_readcount = TIFFFieldReadCount(tfi),
-                .field_type = TIFFFieldDataType(tfi),
-                .field_name = TIFFFieldName(tfi),
-            };
+            const auto field_tag = TIFFFieldTag(tf);
+            const auto field_name = TIFFFieldName(tf);
 
-            const std::string exifName = (fi.field_name != nullptr) ? std::string(fi.field_name) : std::to_string(fi.field_tag);
+            const std::string exifName = (field_name != nullptr) ? std::string(field_name) : std::to_string(field_tag);
 
-            bool usedMetaData = false;
-
-            switch (fi.field_type) {
+            const auto field_type = TIFFFieldDataType(tf);
+            switch (field_type) {
                 case TIFF_BYTE: {
-                    usedMetaData = getMetaData<uint8_t>(tif, fi, metadata, exifName);
+                    getMetaData<uint8_t>(tif, tf, metadata, exifName);
                     break;
                 }
                 case TIFF_UNDEFINED: {
-                    usedMetaData = getMetaData<uint8_t>(tif, fi, metadata, exifName);
+                    getMetaData<uint8_t>(tif, tf, metadata, exifName);
                     break;
                 }
                 case TIFF_ASCII: {
-                    usedMetaData = getMetaDataString(tif, fi, metadata, exifName);
+                    getMetaDataString(tif, tf, metadata, exifName);
                     break;
                 }
                 case TIFF_SHORT: {
-                    usedMetaData = getMetaData<uint16_t>(tif, fi, metadata, exifName);
+                    getMetaData<uint16_t>(tif, tf, metadata, exifName);
                     break;
                 }
                 case TIFF_LONG: {
-                    usedMetaData = getMetaData<uint32_t>(tif, fi, metadata, exifName);
+                    getMetaData<uint32_t>(tif, tf, metadata, exifName);
                     break;
                 }
                 case TIFF_SBYTE: {
-                    usedMetaData = getMetaData<int8_t>(tif, fi, metadata, exifName);
+                    getMetaData<int8_t>(tif, tf, metadata, exifName);
                     break;
                 }
                 case TIFF_SSHORT: {
-                    usedMetaData = getMetaData<int16_t>(tif, fi, metadata, exifName);
+                    getMetaData<int16_t>(tif, tf, metadata, exifName);
                     break;
                 }
                 case TIFF_SLONG: {
-                    usedMetaData = getMetaData<int32_t>(tif, fi, metadata, exifName);
+                    getMetaData<int32_t>(tif, tf, metadata, exifName);
                     break;
                 }
                 case TIFF_SRATIONAL:
                 case TIFF_RATIONAL:
                 case TIFF_FLOAT: {
-                    usedMetaData = getMetaData<float>(tif, fi, metadata, exifName);
+                    getMetaData<float>(tif, tf, metadata, exifName);
                     break;
                 }
                 case TIFF_DOUBLE: {
-                    usedMetaData = getMetaData<double>(tif, fi, metadata, exifName);
+                    getMetaData<double>(tif, tf, metadata, exifName);
                     break;
                 }
                 case TIFF_IFD:
                 case TIFF_IFD8:
-                    std::cout << "Skipping offser field: " << fi.field_name << std::endl;
+                    std::cout << "Skipping offset field: " << field_name << std::endl;
                     break;
                 default:
-                    throw std::runtime_error("Unknown TIFF field type: " + std::to_string(fi.field_type));
+                    throw std::runtime_error("Unknown TIFF field type: " + std::to_string(field_type));
             }
         }
     }
@@ -178,6 +176,96 @@ void fetchExifMetaData(TIFF* tif, tiff_metadata* metadata) {
     }
 }
 
+template <typename T>
+void setMetadata(TIFF* tif, const TIFFField* tf, const tiff_metadata_item& item) {
+    const auto writeCount = TIFFFieldWriteCount(tf);
+    if (writeCount == 1) {
+        const auto value = std::get<T>(item);
+        TIFFSetField(tif, TIFFFieldTag(tf), value);
+    } else {
+        const auto value = std::get<std::vector<T>>(item);
+        if (writeCount < 0) {
+            TIFFSetField(tif, TIFFFieldTag(tf), (uint16_t) value.size(), value.data());
+        } else {
+            if (writeCount != value.size()) {
+                throw std::runtime_error("Vector size mismatch, should be: " + std::to_string(writeCount) + ", got: " + std::to_string(value.size()));
+            }
+            TIFFSetField(tif, TIFFFieldTag(tf), value.data());
+        }
+    }
+}
+
+void setMetadataString(TIFF* tif, const TIFFField* tf, const tiff_metadata_item& item) {
+    const auto string = std::get<std::string>(item);
+    const auto writeCount = TIFFFieldWriteCount(tf);
+    if (writeCount < 0) {
+        TIFFSetField(tif, TIFFFieldTag(tf), (uint16_t) string.size(), string.c_str());
+    } else {
+        const auto stringSize = string.size() + 1; // The string is null terminated
+        if (writeCount != stringSize) {
+            throw std::runtime_error("String size mismatch, should be: " + std::to_string(writeCount) + ", got: " + std::to_string(stringSize));
+        }
+        TIFFSetField(tif, TIFFFieldTag(tf), string.c_str());
+    }
+}
+
+void setMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& key) {
+    const auto entry = metadata->find(key);
+    if (entry != metadata->end()) {
+        const TIFFField* tf = TIFFFieldWithName(tif, key.c_str());
+        if (tf) {
+            const auto field_type = TIFFFieldDataType(tf);
+
+            switch (field_type) {
+                case TIFF_BYTE: {
+                    setMetadata<uint8_t>(tif, tf, entry->second);
+                    break;
+                }
+                case TIFF_UNDEFINED: {
+                    setMetadata<uint8_t>(tif, tf, entry->second);
+                    break;
+                }
+                case TIFF_ASCII: {
+                    setMetadataString(tif, tf, entry->second);
+                    break;
+                }
+                case TIFF_SHORT: {
+                    setMetadata<uint16_t>(tif, tf, entry->second);
+                    break;
+                }
+                case TIFF_LONG: {
+                    setMetadata<uint32_t>(tif, tf, entry->second);
+                    break;
+                }
+                case TIFF_SBYTE: {
+                    setMetadata<int8_t>(tif, tf, entry->second);
+                    break;
+                }
+                case TIFF_SSHORT: {
+                    setMetadata<int16_t>(tif, tf, entry->second);
+                    break;
+                }
+                case TIFF_SLONG: {
+                    setMetadata<int32_t>(tif, tf, entry->second);
+                    break;
+                }
+                case TIFF_SRATIONAL:
+                case TIFF_RATIONAL:
+                case TIFF_FLOAT: {
+                    setMetadata<float>(tif, tf, entry->second);
+                    break;
+                }
+                case TIFF_DOUBLE: {
+                    setMetadata<double>(tif, tf, entry->second);
+                    break;
+                }
+                default:
+                    throw std::runtime_error("Unknown TIFF field type: " + std::to_string(field_type));
+            }
+        }
+    }
+}
+
 static const TIFFFieldInfo xtiffFieldInfo[] = {
     { TIFFTAG_DNG_IMAGEWIDTH, -1, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "DNG ImageWidth" },
     { TIFFTAG_DNG_IMAGEHEIGHT, -1, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "DNG ImageHeight" },
@@ -190,10 +278,10 @@ static const TIFFFieldInfo xtiffFieldInfo[] = {
     { TIFFTAG_REELNAME, -1, -1, TIFF_ASCII, FIELD_CUSTOM, 1, 0, "ReelName" },
 
     { TIFFTAG_PROFILENAME, -1, -1, TIFF_ASCII, FIELD_CUSTOM, 1, 0, "ProfileName" },
-    { TIFFTAG_PROFILELOOKTABLEDIMS, 3, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "ProfileLookTableDims" },
+    { TIFFTAG_PROFILELOOKTABLEDIMS, -1, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "ProfileLookTableDims" },
     { TIFFTAG_PROFILELOOKTABLEDATA, -1, -1, TIFF_FLOAT, FIELD_CUSTOM, 1, 0, "ProfileLookTableData" },
     { TIFFTAG_PROFILELOOKTABLEENCODING, -1, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "ProfileLookTableEncoding" },
-    { TIFFTAG_DEFAULTUSERCROP, 4, -1, TIFF_RATIONAL, FIELD_CUSTOM, 1, 0, "DefaultUserCrop" },
+    { TIFFTAG_DEFAULTUSERCROP, -1, -1, TIFF_RATIONAL, FIELD_CUSTOM, 1, 0, "DefaultUserCrop" },
 
     { TIFFTAG_RATING, -1, -1, TIFF_SHORT, FIELD_CUSTOM, 1, 0, "Rating" },
     { TIFFTAG_RATINGPERCENT, -1, -1, TIFF_SHORT, FIELD_CUSTOM, 1, 0, "RatingPercent" },
@@ -206,16 +294,16 @@ static void registerCustomTIFFTags(TIFF *tif) {
     // Install the extended Tag field info
     TIFFMergeFieldInfo( tif, xtiffFieldInfo, sizeof( xtiffFieldInfo ) / sizeof( xtiffFieldInfo[0] ) );
 
-    if( parent_extender )
-        (*parent_extender)(tif);
+    if (parent_extender)
+        parent_extender(tif);
 }
 
 void augment_libtiff_with_custom_tags() {
-    static int first_time = 1;
-    if( !first_time )
-        return;
-    first_time = 0;
-    parent_extender = TIFFSetTagExtender( registerCustomTIFFTags );
+    static bool first_time = true;
+    if (first_time) {
+        parent_extender = TIFFSetTagExtender( registerCustomTIFFTags );
+        first_time = false;
+    }
 }
 
 }  // namespace gls
