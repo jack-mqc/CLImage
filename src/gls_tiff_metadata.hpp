@@ -19,6 +19,7 @@
 #include <variant>
 #include <vector>
 #include <map>
+#include <string>
 
 #include <tiffio.h>
 
@@ -34,6 +35,30 @@ class tiff_metadata: public std::map<const std::string, const tiff_metadata_item
 void fetchExifMetaData(TIFF* tif, tiff_metadata* metadata);
 
 void getAllTIFFTags(TIFF* tif, tiff_metadata* metadata);
+
+template <typename T>
+void writeVectorMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& key) {
+    const auto entry = metadata->find(key);
+    if (entry != metadata->end()) {
+        const auto value = std::get<std::vector<T>>(entry->second);
+        const TIFFField* tf = TIFFFieldWithName(tif, key.c_str());
+        if (tf) {
+            TIFFSetField(tif, TIFFFieldTag(tf), value.size(), value.data());
+        }
+    }
+}
+
+template <typename T>
+void writeScalarMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& key) {
+    const auto entry = metadata->find(key);
+    if (entry != metadata->end()) {
+        const auto value = std::get<T>(entry->second);
+        const TIFFField* tf = TIFFFieldWithName(tif, key.c_str());
+        if (tf) {
+            TIFFSetField(tif, TIFFFieldTag(tf), value);
+        }
+    }
+}
 
 } // namespace gls
 

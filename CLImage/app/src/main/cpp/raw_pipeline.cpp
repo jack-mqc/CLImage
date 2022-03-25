@@ -26,6 +26,21 @@ static const char* TAG = "RawPipeline Test";
 
 inline uint16_t clamp(int x) { return x < 0 ? 0 : x > 0xffff ? 0xffff : x; }
 
+//static const short bayerPatternDimensions[] = { 2, 2 };
+//static const unsigned char bayerPattern[] = "\00\01\01\02"; // "\01\02\00\01";
+//
+//std::array<float, 9> color_matrix = {
+//    1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553
+//};
+//std::array<float, 3> camera_multipliers = {
+//    1.354894, 1.000000, 1.920234
+//};
+//const std::array<float, 3> as_shot_neutral = {
+//    1.f / (camera_multipliers[0] / camera_multipliers[1]),
+//    1.f,
+//    1.f / (camera_multipliers[2] / camera_multipliers[1])
+//};
+
 int main(int argc, const char* argv[]) {
     printf("RawPipeline Test!\n");
 
@@ -49,6 +64,6 @@ int main(int argc, const char* argv[]) {
 
         auto output_file = input_path.replace_extension("_my.dng").c_str();
 
-        inputImage->write_dng_file(output_file, /*compression=*/ gls::JPEG);
+        inputImage->write_dng_file(output_file, /*compression=*/ gls::JPEG, &metadata);
     }
 }

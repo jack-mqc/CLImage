@@ -330,57 +330,58 @@ void write_dng_file(const std::string& filename, int width, int height, int pixe
                        [](TIFF *tif) { TIFFClose(tif); });
 
     if (tif) {
-        static const short bayerPatternDimensions[] = { 2, 2 };
-        static const unsigned char bayerPattern[] = "\00\01\01\02"; // "\01\02\00\01";
-        std::array<float, 9> color_matrix = {
-            // 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553
+        if (metadata) {
+            try {
+                const auto blackLevel = (*metadata)["BlackLevel"];
+                std::cout << "BlackLevel: " << std::get<std::vector<float>>(blackLevel)[0] << std::endl;
+            }
+            catch (const std::bad_variant_access& ex) {
+                std::cout << ex.what() << '\n';
+            }
+        }
 
-            0.8059082031, -0.2783203125, -0.060546875,
-            -0.5290527344,  1.441650391,   0.05517578125,
-            -0.09350585938, 0.3002929688,  0.63671875
-        };
-//        std::array<float, 3> camera_multipliers = {
-//            1.354894, 1.000000, 1.920234
-//        };
-        const std::array<float, 3> as_shot_neutral = {
-//            1.f / (camera_multipliers[0] / camera_multipliers[1]),
-//            1.f,
-//            1.f / (camera_multipliers[2] / camera_multipliers[1])
-
-            0.4731977819, 1, 0.7781155015
-        };
-        const std::array<float, 4> black_level = {0, 0, 0, 0};
-        static const uint32_t white_level = 15000; // 0x0fff;
+        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, width);
+        TIFFSetField(tif, TIFFTAG_IMAGELENGTH, height);
 
         TIFFSetField(tif, TIFFTAG_DNGVERSION, "\01\04\00\00");
-        TIFFSetField(tif, TIFFTAG_DNGBACKWARDVERSION, "\01\04\00\00");
+        TIFFSetField(tif, TIFFTAG_DNGBACKWARDVERSION, "\01\03\00\00");
         TIFFSetField(tif, TIFFTAG_SUBFILETYPE, 0);
         TIFFSetField(tif, TIFFTAG_COMPRESSION, compression);
         TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 16);
         TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
         TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_CFA);
+        TIFFSetField(tif, TIFFTAG_CFALAYOUT, 1); // Rectangular (or square) layout
         TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
         TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
         TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
-        TIFFSetField(tif, TIFFTAG_CFAREPEATPATTERNDIM, &bayerPatternDimensions);
-        TIFFSetField(tif, TIFFTAG_CFAPATTERN, 4, bayerPattern);
 
         TIFFSetField(tif, TIFFTAG_MAKE, "Glass");
         TIFFSetField(tif, TIFFTAG_UNIQUECAMERAMODEL, "Glass 1");
 
-        TIFFSetField(tif, TIFFTAG_COLORMATRIX1, 9, &color_matrix);
-        TIFFSetField(tif, TIFFTAG_CALIBRATIONILLUMINANT1, 21); // D65
-        TIFFSetField(tif, TIFFTAG_ASSHOTNEUTRAL, 3, &as_shot_neutral);
+        if (metadata) {
+            const auto CFARepeatPatternDim = std::get<std::vector<uint16_t>>((*metadata)["CFARepeatPatternDim"]);
+            TIFFSetField(tif, TIFFTAG_CFAREPEATPATTERNDIM, CFARepeatPatternDim.data());
 
-        TIFFSetField(tif, TIFFTAG_CFALAYOUT, 1); // Rectangular (or square) layout
-        TIFFSetField(tif, TIFFTAG_CFAPLANECOLOR, 3, "\00\01\02");
-        TIFFSetField(tif, TIFFTAG_BAYERGREENSPLIT, 0);
+            writeVectorMetadata<uint8_t>(tif, metadata, "CFAPattern");
 
-        TIFFSetField(tif, TIFFTAG_BLACKLEVEL, 4, &black_level);
-        TIFFSetField(tif, TIFFTAG_WHITELEVEL, 1, &white_level);
+            writeVectorMetadata<float>(tif, metadata, "ColorMatrix1");
+            writeVectorMetadata<float>(tif, metadata, "ColorMatrix2");
 
-        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, width);
-        TIFFSetField(tif, TIFFTAG_IMAGELENGTH, height);
+            writeScalarMetadata<uint16_t>(tif, metadata, "CalibrationIlluminant1");
+            writeScalarMetadata<uint16_t>(tif, metadata, "CalibrationIlluminant2");
+
+            writeVectorMetadata<float>(tif, metadata, "AsShotNeutral");
+
+            // writeVectorMetadata<uint16_t>(tif, metadata, "BlackLevelRepeatDim");
+            const auto BlackLevelRepeatDim = std::get<std::vector<uint16_t>>((*metadata)["BlackLevelRepeatDim"]);
+            TIFFSetField(tif, TIFFTAG_BLACKLEVELREPEATDIM, BlackLevelRepeatDim.data());
+
+            writeVectorMetadata<float>(tif, metadata, "BlackLevel");
+            writeVectorMetadata<uint32_t>(tif, metadata, "WhiteLevel");
+
+            writeScalarMetadata<uint32_t>(tif, metadata, "BayerGreenSplit");
+            writeScalarMetadata<float>(tif, metadata, "BaselineExposure");
+        }
 
         if (compression == COMPRESSION_JPEG) {
             TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, height);
