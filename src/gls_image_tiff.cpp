@@ -153,68 +153,6 @@ void write_tiff_file(const std::string& filename, int width, int height, int pix
     }
 }
 
-#define TIFFTAG_DNG_IMAGEWIDTH 61441
-#define TIFFTAG_DNG_IMAGEHEIGHT 61442
-#define TIFFTAG_DNG_BITSPERSAMPLE 61443
-
-#define TIFFTAG_FORWARDMATRIX1 50964
-#define TIFFTAG_FORWARDMATRIX2 50965
-#define TIFFTAG_TIMECODES 51043
-#define TIFFTAG_FRAMERATE 51044
-#define TIFFTAG_REELNAME 51081
-
-#define TIFFTAG_PROFILENAME 50936
-#define TIFFTAG_PROFILELOOKTABLEDIMS 50981
-#define TIFFTAG_PROFILELOOKTABLEDATA 50982
-#define TIFFTAG_PROFILELOOKTABLEENCODING 51108
-#define TIFFTAG_DEFAULTUSERCROP 51125
-
-#define TIFFTAG_RATING 18246
-#define TIFFTAG_RATINGPERCENT 18249
-#define TIFFTAG_TIFFEPSTANDARDID 37398
-
-static const TIFFFieldInfo xtiffFieldInfo[] = {
-    { TIFFTAG_DNG_IMAGEWIDTH, -1, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "DNG ImageWidth" },
-    { TIFFTAG_DNG_IMAGEHEIGHT, -1, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "DNG ImageHeight" },
-    { TIFFTAG_DNG_BITSPERSAMPLE, -1, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "DNG BitsPerSample" },
-
-    { TIFFTAG_FORWARDMATRIX1, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "ForwardMatrix1" },
-    { TIFFTAG_FORWARDMATRIX2, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "ForwardMatrix2" },
-    { TIFFTAG_TIMECODES, -1, -1, TIFF_BYTE, FIELD_CUSTOM, 1, 1, "TimeCodes" },
-    { TIFFTAG_FRAMERATE, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "FrameRate" },
-    { TIFFTAG_REELNAME, -1, -1, TIFF_ASCII, FIELD_CUSTOM, 1, 0, "ReelName" },
-
-    { TIFFTAG_PROFILENAME, -1, -1, TIFF_ASCII, FIELD_CUSTOM, 1, 0, "ProfileName" },
-    { TIFFTAG_PROFILELOOKTABLEDIMS, 3, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "ProfileLookTableDims" },
-    { TIFFTAG_PROFILELOOKTABLEDATA, -1, -1, TIFF_FLOAT, FIELD_CUSTOM, 1, 0, "ProfileLookTableData" },
-    { TIFFTAG_PROFILELOOKTABLEENCODING, -1, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "ProfileLookTableEncoding" },
-    { TIFFTAG_DEFAULTUSERCROP, 4, -1, TIFF_RATIONAL, FIELD_CUSTOM, 1, 0, "DefaultUserCrop" },
-
-    { TIFFTAG_RATING, -1, -1, TIFF_SHORT, FIELD_CUSTOM, 1, 0, "Rating" },
-    { TIFFTAG_RATINGPERCENT, -1, -1, TIFF_SHORT, FIELD_CUSTOM, 1, 0, "RatingPercent" },
-    { TIFFTAG_TIFFEPSTANDARDID, -1, -1, TIFF_SHORT, FIELD_CUSTOM, 1, 0, "TIFF-EP Standard ID" },
-};
-
-static TIFFExtendProc parent_extender = NULL;  // In case we want a chain of extensions
-
-static void registerCustomTIFFTags( TIFF *tif )
-{
-    // Install the extended Tag field info
-    TIFFMergeFieldInfo( tif, xtiffFieldInfo, sizeof( xtiffFieldInfo ) / sizeof( xtiffFieldInfo[0] ) );
-
-    if( parent_extender )
-        (*parent_extender)(tif);
-}
-
-static void augment_libtiff_with_custom_tags( void )
-{
-    static int first_time = 1;
-    if( !first_time )
-        return;
-    first_time = 0;
-    parent_extender = TIFFSetTagExtender( registerCustomTIFFTags );
-}
-
 void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bit_depth, gls::tiff_metadata* metadata,
                     std::function<bool(int width, int height)> image_allocator,
                     std::function<void(int tiff_bitspersample, int tiff_samplesperpixel, int row, int strip_height,

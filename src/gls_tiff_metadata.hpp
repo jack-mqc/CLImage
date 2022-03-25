@@ -36,6 +36,8 @@ void fetchExifMetaData(TIFF* tif, tiff_metadata* metadata);
 
 void getAllTIFFTags(TIFF* tif, tiff_metadata* metadata);
 
+void augment_libtiff_with_custom_tags();
+
 template <typename T>
 void writeVectorMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& key) {
     const auto entry = metadata->find(key);
@@ -63,6 +65,26 @@ void writeScalarMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& 
         }
     }
 }
+
+#define TIFFTAG_DNG_IMAGEWIDTH 61441
+#define TIFFTAG_DNG_IMAGEHEIGHT 61442
+#define TIFFTAG_DNG_BITSPERSAMPLE 61443
+
+#define TIFFTAG_FORWARDMATRIX1 50964
+#define TIFFTAG_FORWARDMATRIX2 50965
+#define TIFFTAG_TIMECODES 51043
+#define TIFFTAG_FRAMERATE 51044
+#define TIFFTAG_REELNAME 51081
+
+#define TIFFTAG_PROFILENAME 50936
+#define TIFFTAG_PROFILELOOKTABLEDIMS 50981
+#define TIFFTAG_PROFILELOOKTABLEDATA 50982
+#define TIFFTAG_PROFILELOOKTABLEENCODING 51108
+#define TIFFTAG_DEFAULTUSERCROP 51125
+
+#define TIFFTAG_RATING 18246
+#define TIFFTAG_RATINGPERCENT 18249
+#define TIFFTAG_TIFFEPSTANDARDID 37398
 
 } // namespace gls
 
