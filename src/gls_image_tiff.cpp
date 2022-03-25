@@ -317,7 +317,7 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
 }
 
 void write_dng_file(const std::string& filename, int width, int height, int pixel_channels, int pixel_bit_depth,
-                     tiff_compression compression, tiff_metadata* metadata, std::function<uint16_t*(int row)> row_pointer) {
+                    tiff_compression compression, tiff_metadata* metadata, std::function<uint16_t*(int row)> row_pointer) {
     if (compression != COMPRESSION_NONE &&
         compression != COMPRESSION_JPEG &&
         compression != COMPRESSION_ADOBE_DEFLATE) {
@@ -389,7 +389,7 @@ void write_dng_file(const std::string& filename, int width, int height, int pixe
             dng_stream out_stream((uint8_t*) outputBuffer.data(), outputBuffer.size() * sizeof(uint16_t));
 
             EncodeLosslessJPEG(row_pointer(0), height, width,
-                               /*srcChannels=*/ 1, /*srcBitDepth=*/ 14,
+                               /*srcChannels=*/ 1, /*srcBitDepth=*/ 16, // TODO: reflect the actual bit depth
                                /*srcRowStep=*/ width, /*srcColStep=*/ 1, out_stream);
 
             if (TIFFWriteRawStrip(tif, 0, outputBuffer.data(), out_stream.Position()) < 0) {
