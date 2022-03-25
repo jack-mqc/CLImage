@@ -387,36 +387,36 @@ void cam_xyz_coeff(float rgb_cam[3][3], float pre_mul[3], const float cam_xyz[3]
     }
 }
 
-gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage) {
-    // From DNG Metadata
-    const float color_matrix[3][3] = {
-//        { 1.9435, -0.8992, -0.1936 },
-//        { 0.1144,  0.8380,  0.0475 },
-//        { 0.0136,  0.1203,  0.3553 }
+gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
+                                                        const gls::tiff_metadata& metadata) {
+    const auto color_matrix = std::get<std::vector<float>>(metadata.find("ColorMatrix1")->second);
+    const auto as_shot_neutral = std::get<std::vector<float>>(metadata.find("AsShotNeutral")->second);
+    // const auto black_level = std::get<std::vector<float>>(metadata.find("BlackLevel")->second)[0];
+    const float white_level = std::get<std::vector<uint32_t>>(metadata.find("WhiteLevel")->second)[0];
+    const auto cfa_pattern = std::get<std::vector<uint8_t>>(metadata.find("CFAPattern")->second);
 
-        // A CM
-//        {  0.8950195312, -0.3205566406, 0.04931640625  },
-//        { -0.5830078125,  1.609863281, -0.002197265625 },
-//        { -0.08374023438, 0.2768554688, 0.7937011719   }
-
-        // D65 CM
-        {  0.8059082031, -0.2783203125, -0.060546875 },
-        { -0.5290527344,  1.441650391,   0.05517578125 },
-        { -0.09350585938, 0.3002929688,  0.63671875 }
-    };
-    const float as_shot_neutral[3] = {
-        // 0.7380, 1, 0.5207
-        0.4731977819, 1, 0.7781155015
-    };
+    uint32_t cfa_pattern_32 = *((uint32_t *) cfa_pattern.data());
+    const auto bayerPattern = cfa_pattern_32 == 0x0112 ? BayerPattern::rggb
+                            : cfa_pattern_32 == 0x2110 ? BayerPattern::bggr
+                            : cfa_pattern_32 == 0x1021 ? BayerPattern::grbg
+                            : BayerPattern::gbrg;
 
     float cam_mul[3];
     for (int i = 0; i < 3; i++) {
         cam_mul[i] = 1.0 / as_shot_neutral[i];
     }
 
+    float cam_rgb[3][3];
+    for (int j = 0; j < 3; j++) {
+        for (int i = 0; i < 3; i++) {
+            cam_rgb[j][i] = color_matrix[3 * j + i];
+        }
+    }
+
     float rgb_cam[3][3];
     float pre_mul[4];
-    cam_xyz_coeff(rgb_cam, pre_mul, color_matrix);
+    
+    cam_xyz_coeff(rgb_cam, pre_mul, cam_rgb);
 
     // If cam_mul is available use that instead of pre_mul
     for (int i = 0; i < 3; i++) {
@@ -439,25 +439,15 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     }
     printf("\n");
 
-    auto minmax = std::minmax_element(std::begin(pre_mul), std::end(pre_mul));
-
-    // TODO: This is objectionable: don't renormalize, just use the max value from metadata
-    float maximum = 0x3fff;
-    for (const auto p : rawImage.pixels()) {
-        if (p > maximum) {
-            maximum = p;
-        }
-    }
-
     // Scale Input Image
+    auto minmax = std::minmax_element(std::begin(pre_mul), std::end(pre_mul));
     std::array<float, 4> scale_mul;
     for (int c = 0; c < 4; c++) {
-        printf("pre_mul[c]: %f, *minmax.second: %f, maximum: %f\n", pre_mul[c], *minmax.second, maximum);
-        scale_mul[c] = (pre_mul[c] / *minmax.first) * 65535.0 / maximum;
+        printf("pre_mul[c]: %f, *minmax.second: %f, white_level: %f\n", pre_mul[c], *minmax.second, white_level);
+        scale_mul[c] = (pre_mul[c] / *minmax.first) * 65535.0 / white_level;
     }
     printf("scale_mul: %f, %f, %f, %f\n", scale_mul[0], scale_mul[1], scale_mul[2], scale_mul[3]);
 
-    const auto bayerPattern = BayerPattern::rggb; // gbrg;
     const auto offsets = bayerOffsets[bayerPattern];
     gls::image<gls::luma_pixel_16> scaledRawImage = gls::image<gls::luma_pixel_16>(rawImage.width, rawImage.height);
     for (int y = 0; y < rawImage.height / 2; y++) {

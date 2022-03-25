@@ -17,6 +17,7 @@
 #define demosaic_hpp
 
 #include "gls_image.hpp"
+#include "gls_tiff_metadata.hpp"
 
 enum BayerPattern {
     grbg = 0,
@@ -25,10 +26,12 @@ enum BayerPattern {
     bggr = 3
 };
 
-void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage, gls::image<gls::rgb_pixel_16>* rgbImage, BayerPattern bayerPattern);
+void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage,
+                      gls::image<gls::rgb_pixel_16>* rgbImage, BayerPattern bayerPattern);
 
 void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayerPattern);
 
-gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage);
+gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
+                                                        const gls::tiff_metadata& metadata);
 
 #endif /* demosaic_hpp */

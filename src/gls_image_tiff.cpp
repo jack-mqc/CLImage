@@ -193,14 +193,6 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
             getAllTIFFTags(tif, metadata);
         }
 
-        try {
-            const auto blackLevel = (*metadata)["BlackLevel"];
-            std::cout << "BlackLevel: " << std::get<std::vector<float>>(blackLevel)[0] << std::endl;
-        }
-        catch (const std::bad_variant_access& ex) {
-            std::cout << ex.what() << '\n';
-        }
-
         auto allocation_successful = image_allocator(width, height);
         if (allocation_successful) {
             if (compression == COMPRESSION_JPEG) {
@@ -268,16 +260,6 @@ void write_dng_file(const std::string& filename, int width, int height, int pixe
                        [](TIFF *tif) { TIFFClose(tif); });
 
     if (tif) {
-        if (metadata) {
-            try {
-                const auto blackLevel = (*metadata)["BlackLevel"];
-                std::cout << "BlackLevel: " << std::get<std::vector<float>>(blackLevel)[0] << std::endl;
-            }
-            catch (const std::bad_variant_access& ex) {
-                std::cout << ex.what() << '\n';
-            }
-        }
-
         TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, width);
         TIFFSetField(tif, TIFFTAG_IMAGELENGTH, height);
 
