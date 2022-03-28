@@ -387,13 +387,25 @@ void cam_xyz_coeff(float rgb_cam[3][3], float pre_mul[3], const float cam_xyz[3]
     }
 }
 
+template <typename T>
+std::vector<T> getVector(const gls::tiff_metadata& metadata, const std::string& key) {
+    const auto& entry = metadata.find(key);
+    if (entry != metadata.end()) {
+        return std::get<std::vector<T>>(metadata.find(key)->second);
+    }
+    return std::vector<T>();
+}
+
 gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
                                                         const gls::tiff_metadata& metadata) {
-    const auto color_matrix = std::get<std::vector<float>>(metadata.find("ColorMatrix1")->second);
-    const auto as_shot_neutral = std::get<std::vector<float>>(metadata.find("AsShotNeutral")->second);
-    // const auto black_level = std::get<std::vector<float>>(metadata.find("BlackLevel")->second)[0];  // TODO: use this
-    const float white_level = std::get<std::vector<uint32_t>>(metadata.find("WhiteLevel")->second)[0];
-    const auto cfa_pattern = std::get<std::vector<uint8_t>>(metadata.find("CFAPattern")->second);
+    const auto color_matrix = getVector<float>(metadata, "ColorMatrix1");
+    const auto as_shot_neutral = getVector<float>(metadata, "AsShotNeutral");
+    const auto black_level_vec = getVector<float>(metadata, "BlackLevel");
+    const auto white_level_vec = getVector<uint32_t>(metadata, "WhiteLevel");
+    const auto cfa_pattern = getVector<uint8_t>(metadata, "CFAPattern");
+
+    const float black_level = black_level_vec.empty() ? 0 : black_level_vec[0];
+    const uint32_t white_level = white_level_vec.empty() ? 0xffff : white_level_vec[0];
 
     const auto bayerPattern = std::memcmp(cfa_pattern.data(), "\00\01\01\02", 4) == 0 ? BayerPattern::rggb
                             : std::memcmp(cfa_pattern.data(), "\02\01\01\00", 4) == 0 ? BayerPattern::bggr
@@ -442,8 +454,8 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     auto minmax = std::minmax_element(std::begin(pre_mul), std::end(pre_mul));
     std::array<float, 4> scale_mul;
     for (int c = 0; c < 4; c++) {
-        printf("pre_mul[c]: %f, *minmax.second: %f, white_level: %f\n", pre_mul[c], *minmax.second, white_level);
-        scale_mul[c] = (pre_mul[c] / *minmax.first) * 65535.0 / white_level;
+        printf("pre_mul[c]: %f, *minmax.second: %f, white_level: %d\n", pre_mul[c], *minmax.second, white_level);
+        scale_mul[c] = (pre_mul[c] / *minmax.first) * 65535.0 / (white_level - black_level);
     }
     printf("scale_mul: %f, %f, %f, %f\n", scale_mul[0], scale_mul[1], scale_mul[2], scale_mul[3]);
 
@@ -453,7 +465,7 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
         for (int x = 0; x < rawImage.width / 2; x++) {
             for (int c = 0; c < 4; c++) {
                 const auto& o = offsets[c];
-                scaledRawImage[2 * y + o.y][2 * x + o.x] = clamp(scale_mul[c] * rawImage[2 * y + o.y][2 * x + o.x]);
+                scaledRawImage[2 * y + o.y][2 * x + o.x] = clamp(scale_mul[c] * (rawImage[2 * y + o.y][2 * x + o.x] - black_level));
             }
         }
     }

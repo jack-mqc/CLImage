@@ -16,10 +16,10 @@
 #ifndef TiffMetadata_hpp
 #define TiffMetadata_hpp
 
+#include <string>
 #include <variant>
 #include <vector>
-#include <map>
-#include <string>
+#include <unordered_map>
 
 #include <tiffio.h>
 
@@ -30,11 +30,11 @@ typedef std::variant<uint8_t, uint16_t, uint32_t, int8_t, int16_t, int32_t, floa
                      std::vector<int8_t>, std::vector<int16_t>, std::vector<int32_t>,
                      std::vector<float>, std::vector<double>, std::string> tiff_metadata_item;
 
-class tiff_metadata: public std::map<const std::string, const tiff_metadata_item> { };
+class tiff_metadata: public std::unordered_map<std::string, const tiff_metadata_item> { };
 
-void fetchExifMetaData(TIFF* tif, tiff_metadata* metadata);
+void getExifMetaData(TIFF* tif, tiff_metadata* metadata);
 
-void getAllTIFFTags(TIFF* tif, tiff_metadata* metadata);
+void getAllTags(TIFF* tif, tiff_metadata* metadata);
 
 void augment_libtiff_with_custom_tags();
 

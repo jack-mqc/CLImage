@@ -37,11 +37,37 @@
 
 namespace gls {
 
-static void readTiffImageData(TIFF *tif, int height, int tiff_bitspersample, int tiff_samplesperpixel,
+inline static uint16_t swapBytes(uint16_t in) {
+    return ((in & 0xff) << 8) | (in >> 8);
+}
+
+inline static void unpack12BitsInto16Bits(uint16_t *out, const uint16_t *in, size_t in_size) {
+    for (int i = 0; i < in_size; i += 3) {
+        uint16_t in0 = swapBytes(in[i]);
+        uint16_t in1 = swapBytes(in[i+1]);
+        uint16_t in2 = swapBytes(in[i+2]);
+
+        *out++ = in0 >> 4;
+        *out++ = ((in0 << 8) & 0xfff) | (in1 >> 8);
+        *out++ = ((in1 << 4) & 0xfff) | (in2 >> 12);
+        *out++ = in2 & 0xfff;
+    }
+}
+
+static void readTiffImageData(TIFF *tif, int width, int height, int tiff_bitspersample, int tiff_samplesperpixel,
                        std::function<void(int tiff_bitspersample, int tiff_samplesperpixel, int row, int strip_height,
                                           uint8_t *tiff_buffer)> process_tiff_strip) {
-    auto_ptr<uint8_t> tiffbuf((uint8_t*)_TIFFmalloc(TIFFStripSize(tif)),
+    size_t stripSize = TIFFStripSize(tif);
+    auto_ptr<uint8_t> tiffbuf((uint8_t*)_TIFFmalloc(stripSize),
                               [](uint8_t* tiffbuf) { _TIFFfree(tiffbuf); });
+
+    auto_ptr<uint8_t> decodedBuffer = tiff_bitspersample != 16
+                                    ? auto_ptr<uint8_t>((uint8_t*)_TIFFmalloc(16 * stripSize / tiff_bitspersample),
+                                                         [](uint8_t* buffer) { _TIFFfree(buffer); })
+                                    : auto_ptr<uint8_t>(nullptr, [](uint8_t* buffer){ });
+
+    printf("stripSize: %ld, width: %d\n", stripSize, width);
+
     if (tiffbuf) {
         uint32_t rowsperstrip = 0;
         TIFFGetField(tif, TIFFTAG_ROWSPERSTRIP, &rowsperstrip);
@@ -54,7 +80,15 @@ static void readTiffImageData(TIFF *tif, int height, int tiff_bitspersample, int
                 throw std::runtime_error("Failed to encode TIFF strip.");
             }
 
-            process_tiff_strip(tiff_bitspersample, tiff_samplesperpixel, row, nrow, tiffbuf);
+            if (tiff_bitspersample == 12) {
+                unpack12BitsInto16Bits((uint16_t*) decodedBuffer.get(), (uint16_t*) tiffbuf.get(), stripSize / sizeof(uint16_t));
+
+                process_tiff_strip(/* tiff_bitspersample=*/ 16, tiff_samplesperpixel, row, nrow, decodedBuffer);
+            } else if (tiff_bitspersample == 16) {
+                process_tiff_strip(/* tiff_bitspersample=*/ 16, tiff_samplesperpixel, row, nrow, tiffbuf);
+            } else {
+                throw std::runtime_error("tiff_bitspersample " + std::to_string(tiff_bitspersample) + " not supported.");
+            }
         }
     } else {
         throw std::runtime_error("Error allocating memory buffer for TIFF strip.");
@@ -82,7 +116,7 @@ void read_tiff_file(const std::string& filename, int pixel_channels, int pixel_b
             throw std::runtime_error("can not read sample format other than uint");
         }
 
-        uint16_t tiff_bitspersample=8;
+        uint16_t tiff_bitspersample;
         TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &tiff_bitspersample);
         if ((tiff_bitspersample != 8 && tiff_bitspersample != 16)) {
             throw std::runtime_error("can not read sample with " + std::to_string(tiff_bitspersample) + " bits depth");
@@ -90,7 +124,7 @@ void read_tiff_file(const std::string& filename, int pixel_channels, int pixel_b
 
         auto allocation_successful = image_allocator(width, height);
         if (allocation_successful) {
-            readTiffImageData(tif, height, tiff_bitspersample, tiff_samplesperpixel, process_tiff_strip);
+            readTiffImageData(tif, width, height, tiff_bitspersample, tiff_samplesperpixel, process_tiff_strip);
         } else {
             throw std::runtime_error("Couldn't allocate image storage");
         }
@@ -163,10 +197,40 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
                        [](TIFF *tif) { TIFFClose(tif); });
 
     if (tif) {
-        uint32_t width = 0, height = 0;
-        TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width);
-        TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
-        printf("width: %d, height: %d\n", width, height);
+        if (metadata) {
+            getAllTags(tif, metadata);
+        }
+
+        uint32_t subfileType = 0;
+        TIFFGetField(tif, TIFFTAG_SUBFILETYPE, &subfileType);
+
+        if (subfileType & 1) {
+            // This is a preview, look for the real image
+
+            uint16_t subifdCount;
+            uint64_t* subIFD;
+            TIFFGetField(tif, TIFFTAG_SUBIFD, &subifdCount, &subIFD);
+
+            uint16_t numberOfDirectories = TIFFNumberOfDirectories(tif);
+            printf("numberOfDirectories: %d, subfileType: %d, subifdCount: %d, subIFD: %lld\n",
+                   numberOfDirectories, subfileType, subifdCount, subIFD[0]);
+
+            for (int i = 0; i < subifdCount; i++) {
+                TIFFSetSubDirectory(tif, subIFD[i]);
+
+                uint32_t subfileType = 0;
+                TIFFGetField(tif, TIFFTAG_SUBFILETYPE, &subfileType);
+
+                printf("subfile %i, subfileType: %d\n", i, subfileType);
+
+                if ((subfileType & 1) == 0) {
+                    if (metadata) {
+                        getAllTags(tif, metadata);
+                    }
+                    break;
+                }
+            }
+        }
 
         uint16_t tiff_samplesperpixel = 0;
         TIFFGetField(tif, TIFFTAG_SAMPLESPERPIXEL, &tiff_samplesperpixel);
@@ -180,7 +244,7 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
 
         uint16_t tiff_bitspersample = 0;
         TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &tiff_bitspersample);
-        if ((tiff_bitspersample != 8 && tiff_bitspersample != 16)) {
+        if ((tiff_bitspersample != 8 && tiff_bitspersample != 12 && tiff_bitspersample != 16)) {
             throw std::runtime_error("can not read sample with " + std::to_string(tiff_bitspersample) + " bits depth");
         }
         printf("tiff_bitspersample: %d\n", tiff_bitspersample);
@@ -189,12 +253,15 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
         TIFFGetFieldDefaulted(tif, TIFFTAG_COMPRESSION, &compression);
         printf("compression: %d\n", compression);
 
-        if (metadata) {
-            getAllTIFFTags(tif, metadata);
-        }
+        uint32_t width = 0, height = 0;
+        TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width);
+        TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
+        printf("width: %d, height: %d\n", width, height);
 
         auto allocation_successful = image_allocator(width, height);
         if (allocation_successful) {
+            printf("TIFFIsTiled: %d\n", TIFFIsTiled(tif));  // TODO: Add support for tiled TIFF files
+
             if (compression == COMPRESSION_JPEG) {
                 // DNG data is losslessly compressed
 
@@ -228,18 +295,19 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
                                        decodedSize,
                                        false, stripsize);
 
-                    process_tiff_strip(tiff_bitspersample, tiff_samplesperpixel, 0, height, (uint8_t *) spooler.data());
+                    // The output of the JPEG decoder is always 16 bits
+                    process_tiff_strip(/*tiff_bitspersample=*/ 16, tiff_samplesperpixel, 0, height, (uint8_t *) spooler.data());
                 }
                 _TIFFfree(tiffbuf);
             } else {
                 // No compreession, read as a plain TIFF file
 
-                readTiffImageData(tif, height, tiff_bitspersample, tiff_samplesperpixel, process_tiff_strip);
+                readTiffImageData(tif, width, height, tiff_bitspersample, tiff_samplesperpixel, process_tiff_strip);
             }
         }
 
         if (metadata) {
-            fetchExifMetaData(tif, metadata);
+            getExifMetaData(tif, metadata);
         }
     } else {
         throw std::runtime_error("Couldn't read tiff file.");

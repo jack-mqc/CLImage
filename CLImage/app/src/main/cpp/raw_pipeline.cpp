@@ -37,6 +37,8 @@ int main(int argc, const char* argv[]) {
         gls::tiff_metadata metadata;
         const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &metadata);
 
+        inputImage->write_png_file((input_path.parent_path() / input_path.stem()).string() + ".png");
+
 //        gls::tiff_metadata metadata;
 //        metadata.insert({ "ColorMatrix1", std::vector<float>{ 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553 } });
 //        metadata.insert({ "AsShotNeutral", std::vector<float>{ 0.7380, 1, 0.5207 } });

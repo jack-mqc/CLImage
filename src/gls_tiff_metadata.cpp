@@ -98,80 +98,84 @@ bool getMetaDataString(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata, 
     return false;
 }
 
-void getAllTIFFTags(TIFF* tif, tiff_metadata* metadata) {
+void getMetadata(TIFF* tif, ttag_t field_tag, tiff_metadata* metadata) {
+    const TIFFField* tf = TIFFFieldWithTag(tif, field_tag);
+
+    const auto field_name = TIFFFieldName(tf);
+
+    const std::string exifName = (field_name != nullptr) ? std::string(field_name) : std::to_string(field_tag);
+
+    const auto field_type = TIFFFieldDataType(tf);
+    switch (field_type) {
+        case TIFF_BYTE: {
+            getMetaData<uint8_t>(tif, tf, metadata, exifName);
+            break;
+        }
+        case TIFF_UNDEFINED: {
+            getMetaData<uint8_t>(tif, tf, metadata, exifName);
+            break;
+        }
+        case TIFF_ASCII: {
+            getMetaDataString(tif, tf, metadata, exifName);
+            break;
+        }
+        case TIFF_SHORT: {
+            getMetaData<uint16_t>(tif, tf, metadata, exifName);
+            break;
+        }
+        case TIFF_LONG: {
+            getMetaData<uint32_t>(tif, tf, metadata, exifName);
+            break;
+        }
+        case TIFF_SBYTE: {
+            getMetaData<int8_t>(tif, tf, metadata, exifName);
+            break;
+        }
+        case TIFF_SSHORT: {
+            getMetaData<int16_t>(tif, tf, metadata, exifName);
+            break;
+        }
+        case TIFF_SLONG: {
+            getMetaData<int32_t>(tif, tf, metadata, exifName);
+            break;
+        }
+        case TIFF_SRATIONAL:
+        case TIFF_RATIONAL:
+        case TIFF_FLOAT: {
+            getMetaData<float>(tif, tf, metadata, exifName);
+            break;
+        }
+        case TIFF_DOUBLE: {
+            getMetaData<double>(tif, tf, metadata, exifName);
+            break;
+        }
+        case TIFF_IFD:
+        case TIFF_IFD8:
+            std::cout << "Skipping offset field: " << field_name << std::endl;
+            break;
+        default:
+            throw std::runtime_error("Unknown TIFF field type: " + std::to_string(field_type));
+    }
+}
+
+void getAllTags(TIFF* tif, tiff_metadata* metadata) {
     if (tif) {
-        int cnt = TIFFGetTagListCount(tif);
-        for (int i = 0; i < cnt; i++) {
-            ttag_t tag = TIFFGetTagListEntry(tif, i);
-            const TIFFField* tf = TIFFFieldWithTag(tif, tag);
+        int tag_count = TIFFGetTagListCount(tif);
+        for (int i = 0; i < tag_count; i++) {
+            ttag_t field_tag = TIFFGetTagListEntry(tif, i);
 
-            const auto field_tag = TIFFFieldTag(tf);
-            const auto field_name = TIFFFieldName(tf);
-
-            const std::string exifName = (field_name != nullptr) ? std::string(field_name) : std::to_string(field_tag);
-
-            const auto field_type = TIFFFieldDataType(tf);
-            switch (field_type) {
-                case TIFF_BYTE: {
-                    getMetaData<uint8_t>(tif, tf, metadata, exifName);
-                    break;
-                }
-                case TIFF_UNDEFINED: {
-                    getMetaData<uint8_t>(tif, tf, metadata, exifName);
-                    break;
-                }
-                case TIFF_ASCII: {
-                    getMetaDataString(tif, tf, metadata, exifName);
-                    break;
-                }
-                case TIFF_SHORT: {
-                    getMetaData<uint16_t>(tif, tf, metadata, exifName);
-                    break;
-                }
-                case TIFF_LONG: {
-                    getMetaData<uint32_t>(tif, tf, metadata, exifName);
-                    break;
-                }
-                case TIFF_SBYTE: {
-                    getMetaData<int8_t>(tif, tf, metadata, exifName);
-                    break;
-                }
-                case TIFF_SSHORT: {
-                    getMetaData<int16_t>(tif, tf, metadata, exifName);
-                    break;
-                }
-                case TIFF_SLONG: {
-                    getMetaData<int32_t>(tif, tf, metadata, exifName);
-                    break;
-                }
-                case TIFF_SRATIONAL:
-                case TIFF_RATIONAL:
-                case TIFF_FLOAT: {
-                    getMetaData<float>(tif, tf, metadata, exifName);
-                    break;
-                }
-                case TIFF_DOUBLE: {
-                    getMetaData<double>(tif, tf, metadata, exifName);
-                    break;
-                }
-                case TIFF_IFD:
-                case TIFF_IFD8:
-                    std::cout << "Skipping offset field: " << field_name << std::endl;
-                    break;
-                default:
-                    throw std::runtime_error("Unknown TIFF field type: " + std::to_string(field_type));
-            }
+            getMetadata(tif, field_tag, metadata);
         }
     }
 }
 
-void fetchExifMetaData(TIFF* tif, tiff_metadata* metadata) {
+void getExifMetaData(TIFF* tif, tiff_metadata* metadata) {
     if (tif) {
         uint32_t exif_offset;
         if (TIFFGetField(tif, TIFFTAG_EXIFIFD, &exif_offset)) {
             TIFFReadEXIFDirectory(tif, exif_offset);
 
-            getAllTIFFTags(tif, metadata);
+            getAllTags(tif, metadata);
         }
     }
 }
