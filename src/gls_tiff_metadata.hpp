@@ -30,15 +30,17 @@ typedef std::variant<uint8_t, uint16_t, uint32_t, int8_t, int16_t, int32_t, floa
                      std::vector<int8_t>, std::vector<int16_t>, std::vector<int32_t>,
                      std::vector<float>, std::vector<double>, std::string> tiff_metadata_item;
 
-class tiff_metadata: public std::unordered_map<std::string, const tiff_metadata_item> { };
+class tiff_metadata: public std::unordered_map<std::string, tiff_metadata_item> { };
 
 void getExifMetaData(TIFF* tif, tiff_metadata* metadata);
 
-void getAllTags(TIFF* tif, tiff_metadata* metadata);
+void getAllTIFFTags(TIFF* tif, tiff_metadata* metadata);
 
 void augment_libtiff_with_custom_tags();
 
 void setMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& key);
+
+// DNG Extension Tags
 
 #define TIFFTAG_DNG_IMAGEWIDTH 61441
 #define TIFFTAG_DNG_IMAGEHEIGHT 61442
@@ -59,6 +61,26 @@ void setMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& key);
 #define TIFFTAG_RATING 18246
 #define TIFFTAG_RATINGPERCENT 18249
 #define TIFFTAG_TIFFEPSTANDARDID 37398
+
+#define TIFFTAG_PROFILETONECURVE 50940
+#define TIFFTAG_PROFILEEMBEDPOLICY 50941
+#define TIFFTAG_ORIGINALDEFAULTFINALSIZE 51089
+#define TIFFTAG_ORIGINALBESTQUALITYSIZE 51090
+#define TIFFTAG_ORIGINALDEFAULTCROPSIZE 51091
+#define TIFFTAG_NEWRAWIMAGEDIGEST 51111
+
+#define TIFFTAG_PREVIEWCOLORSPACE 50970
+
+#define TIFFTAG_ASSHOTPROFILENAME 50934
+#define TIFFTAG_PROFILEHUESATMAPDIMS 50937
+#define TIFFTAG_PROFILEHUESATMAPDATA1 50938
+#define TIFFTAG_PROFILEHUESATMAPDATA2 50939
+
+#define TIFFTAG_OPCODELIST1 51009
+#define TIFFTAG_OPCODELIST2 51009
+#define TIFFTAG_OPCODELIST3 51022
+
+#define TIFFTAG_NOISEPROFILE 51041
 
 } // namespace gls
 

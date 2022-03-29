@@ -31,6 +31,8 @@
 		E5AB799C27ED59C0008B3D30 /* gls_tiff_metadata.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB799A27ED59C0008B3D30 /* gls_tiff_metadata.cpp */; };
 		E5AB79A127F159A7008B3D30 /* gls_dng_lossless_jpeg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB79A027F159A7008B3D30 /* gls_dng_lossless_jpeg.cpp */; };
 		E5AB79A227F159A7008B3D30 /* gls_dng_lossless_jpeg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB79A027F159A7008B3D30 /* gls_dng_lossless_jpeg.cpp */; };
+		E5AB79A527F21A44008B3D30 /* gls_color_science.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB79A327F21A44008B3D30 /* gls_color_science.cpp */; };
+		E5AB79A627F21A44008B3D30 /* gls_color_science.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB79A327F21A44008B3D30 /* gls_color_science.cpp */; };
 		E5AD624C27616D7E0055F712 /* libpng.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624927616D7E0055F712 /* libpng.dylib */; };
 		E5AD624E27616D7E0055F712 /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624A27616D7E0055F712 /* libz.dylib */; };
 		E5AD625027616D7E0055F712 /* libjpeg.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624B27616D7E0055F712 /* libjpeg.dylib */; };
@@ -84,6 +86,8 @@
 		E5AB799A27ED59C0008B3D30 /* gls_tiff_metadata.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = gls_tiff_metadata.cpp; path = ../../src/gls_tiff_metadata.cpp; sourceTree = "<group>"; };
 		E5AB799B27ED59C0008B3D30 /* gls_tiff_metadata.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = gls_tiff_metadata.hpp; path = ../../src/gls_tiff_metadata.hpp; sourceTree = "<group>"; };
 		E5AB79A027F159A7008B3D30 /* gls_dng_lossless_jpeg.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = gls_dng_lossless_jpeg.cpp; path = ../../src/gls_dng_lossless_jpeg.cpp; sourceTree = "<group>"; };
+		E5AB79A327F21A44008B3D30 /* gls_color_science.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = gls_color_science.cpp; path = ../../src/gls_color_science.cpp; sourceTree = "<group>"; };
+		E5AB79A427F21A44008B3D30 /* gls_color_science.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = gls_color_science.hpp; path = ../../src/gls_color_science.hpp; sourceTree = "<group>"; };
 		E5AD623C27616ABA0055F712 /* CLImageTest */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CLImageTest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5AD624927616D7E0055F712 /* libpng.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpng.dylib; path = CLImageTest/libs/libpng.dylib; sourceTree = "<group>"; };
 		E5AD624A27616D7E0055F712 /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = CLImageTest/libs/libz.dylib; sourceTree = "<group>"; };
@@ -212,6 +216,8 @@
 				E51AACE827E1AA1500E99B58 /* gls_auto_ptr.hpp */,
 				E5AB799927EBD9D3008B3D30 /* gls_dng_lossless_jpeg.hpp */,
 				E5AB79A027F159A7008B3D30 /* gls_dng_lossless_jpeg.cpp */,
+				E5AB79A327F21A44008B3D30 /* gls_color_science.cpp */,
+				E5AB79A427F21A44008B3D30 /* gls_color_science.hpp */,
 			);
 			name = climage;
 			sourceTree = "<group>";
@@ -333,6 +339,7 @@
 				E5AB798A27EAD0D7008B3D30 /* cl_pipeline.cpp in Sources */,
 				E5188C6C27EA63A700F2332C /* gls_image_jpeg.cpp in Sources */,
 				E5188C6D27EA63A700F2332C /* gls_cl.cpp in Sources */,
+				E5AB79A627F21A44008B3D30 /* gls_color_science.cpp in Sources */,
 				E5AB799C27ED59C0008B3D30 /* gls_tiff_metadata.cpp in Sources */,
 				E5AB798827EAD0D7008B3D30 /* demosaic.cpp in Sources */,
 				E5188C6E27EA63A700F2332C /* gls_image_tiff.cpp in Sources */,
@@ -352,6 +359,7 @@
 				E5AD627F276174FC0055F712 /* gls_image_jpeg.cpp in Sources */,
 				E5AD6280276174FC0055F712 /* gls_cl.cpp in Sources */,
 				E5AB798727EAD0D7008B3D30 /* demosaic.cpp in Sources */,
+				E5AB79A527F21A44008B3D30 /* gls_color_science.cpp in Sources */,
 				E51AACE727E1548400E99B58 /* gls_image_tiff.cpp in Sources */,
 				E5AD6283276174FC0055F712 /* gls_logging.cpp in Sources */,
 				E5AD6281276174FC0055F712 /* gls_image_png.cpp in Sources */,

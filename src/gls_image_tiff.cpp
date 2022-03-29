@@ -198,7 +198,7 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
 
     if (tif) {
         if (metadata) {
-            getAllTags(tif, metadata);
+            getAllTIFFTags(tif, metadata);
         }
 
         uint32_t subfileType = 0;
@@ -225,7 +225,7 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
 
                 if ((subfileType & 1) == 0) {
                     if (metadata) {
-                        getAllTags(tif, metadata);
+                        getAllTIFFTags(tif, metadata);
                     }
                     break;
                 }
@@ -244,9 +244,9 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
 
         uint16_t tiff_bitspersample = 0;
         TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &tiff_bitspersample);
-        if ((tiff_bitspersample != 8 && tiff_bitspersample != 12 && tiff_bitspersample != 16)) {
-            throw std::runtime_error("can not read sample with " + std::to_string(tiff_bitspersample) + " bits depth");
-        }
+//        if ((tiff_bitspersample != 8 && tiff_bitspersample != 12 && tiff_bitspersample != 16)) {
+//            throw std::runtime_error("can not read sample with " + std::to_string(tiff_bitspersample) + " bits depth");
+//        }
         printf("tiff_bitspersample: %d\n", tiff_bitspersample);
 
         uint16_t compression = 0;
@@ -260,49 +260,103 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
 
         auto allocation_successful = image_allocator(width, height);
         if (allocation_successful) {
-            printf("TIFFIsTiled: %d\n", TIFFIsTiled(tif));  // TODO: Add support for tiled TIFF files
+            printf("TIFFIsTiled: %d\n", TIFFIsTiled(tif));
 
-            if (compression == COMPRESSION_JPEG) {
-                // DNG data is losslessly compressed
+            if (TIFFIsTiled(tif)) {
+                uint32_t maxTileWidth, maxTileHeight;
 
-                uint32_t* stripbytecounts = 0;
-                TIFFGetField(tif, TIFFTAG_STRIPBYTECOUNTS, &stripbytecounts);
-                printf("stripbytecounts: %d\n", stripbytecounts[0]);
+                TIFFGetField(tif, TIFFTAG_TILEWIDTH, &maxTileWidth);
+                TIFFGetField(tif, TIFFTAG_TILELENGTH, &maxTileHeight);
 
-                // We only expect one single big strip, but you never know
-                uint32_t stripsize = stripbytecounts[0];
+                printf("tileWidth: %d, tileHeight: %d\n", maxTileWidth, maxTileHeight);
 
-                if (TIFFNumberOfStrips(tif) != 1) {
-                    throw std::runtime_error("Only one TIFF strip expected for compressed DNG files.");
-                }
+                tmsize_t tileSize = TIFFTileSize(tif);
+                uint32_t tileCount = TIFFNumberOfTiles(tif);
+                uint32_t tileCountX = (width + maxTileWidth - 1) / maxTileWidth;
+                auto_ptr<uint16_t> tiffbuf((uint16_t*)_TIFFmalloc(tileSize),
+                                           [](uint16_t* buf) { _TIFFfree(buf); });
 
-                tdata_t tiffbuf = _TIFFmalloc(stripsize);
-                for (int strip = 0; strip < TIFFNumberOfStrips(tif); strip++) {
-                    if (stripbytecounts[strip] > stripsize) {
-                        tiffbuf = _TIFFrealloc(tiffbuf, stripbytecounts[strip]);
-                        stripsize = stripbytecounts[strip];
+                auto_ptr<uint16_t> imagebuf((uint16_t*)_TIFFmalloc(width * height * sizeof(uint16_t)),
+                                            [](uint16_t* buf) { _TIFFfree(buf); });
+
+                if (compression == COMPRESSION_JPEG) {
+                    for (uint32_t tile = 0; tile < tileCount; tile++) {
+                        uint32_t tileX = maxTileWidth * (tile % tileCountX);
+                        uint32_t tileY = maxTileHeight * (tile / tileCountX);
+
+                        uint32_t tileWidth = std::min(tileX + maxTileWidth, width) - tileX;
+                        uint32_t tileHeight = std::min(tileY + maxTileHeight, height) - tileY;
+
+                        tmsize_t tileBytes = TIFFReadRawTile(tif, tile, (uint8_t *) tiffbuf.get(), (tsize_t) -1);
+                        if (tileBytes < 0) {
+                            throw std::runtime_error("Failed to read TIFF tile " + std::to_string(tile));
+                        } else {
+                            // Used Adobe's version of libjpeg lossless codec
+                            dng_stream stream((uint8_t *) tiffbuf.get(), tileSize);
+                            dng_spooler spooler;
+                            uint32_t decodedSize = maxTileWidth * maxTileHeight * sizeof(uint16_t);
+                            DecodeLosslessJPEG(stream, spooler,
+                                               decodedSize,
+                                               decodedSize,
+                                               false, tileSize);
+
+                            uint16_t *tilePixels = (uint16_t *) spooler.data();
+                            for (int y = 0; y < tileHeight; y++) {
+                                for (int x = 0; x < tileWidth; x++) {
+                                    imagebuf[(tileY + y) * width + tileX + x] = tilePixels[y * tileWidth + x];
+                                }
+                            }
+                        }
                     }
-                    if (TIFFReadRawStrip(tif, strip, tiffbuf, stripbytecounts[strip]) < 0) {
-                        throw std::runtime_error("Failed to read compressed TIFF strip.");
-                    }
-
-                    // Used Adobe's version of libjpeg lossless codec
-                    dng_stream stream((uint8_t *) tiffbuf, stripsize);
-                    dng_spooler spooler;
-                    uint32_t decodedSize = width * height * sizeof(uint16_t);
-                    DecodeLosslessJPEG(stream, spooler,
-                                       decodedSize,
-                                       decodedSize,
-                                       false, stripsize);
 
                     // The output of the JPEG decoder is always 16 bits
-                    process_tiff_strip(/*tiff_bitspersample=*/ 16, tiff_samplesperpixel, 0, height, (uint8_t *) spooler.data());
+                    process_tiff_strip(/*tiff_bitspersample=*/ 16, tiff_samplesperpixel, 0, height, (uint8_t *) imagebuf.get());
+                } else {
+                    throw std::runtime_error("Not implemented yet...");
                 }
-                _TIFFfree(tiffbuf);
             } else {
-                // No compreession, read as a plain TIFF file
+                if (compression == COMPRESSION_JPEG) {
+                    // DNG data is losslessly compressed
 
-                readTiffImageData(tif, width, height, tiff_bitspersample, tiff_samplesperpixel, process_tiff_strip);
+                    uint32_t* stripbytecounts = 0;
+                    TIFFGetField(tif, TIFFTAG_STRIPBYTECOUNTS, &stripbytecounts);
+                    printf("stripbytecounts: %d\n", stripbytecounts[0]);
+
+                    // We only expect one single big strip, but you never know
+                    uint32_t stripsize = stripbytecounts[0];
+
+                    if (TIFFNumberOfStrips(tif) != 1) {
+                        throw std::runtime_error("Only one TIFF strip expected for compressed DNG files.");
+                    }
+
+                    tdata_t tiffbuf = _TIFFmalloc(stripsize);
+                    for (int strip = 0; strip < TIFFNumberOfStrips(tif); strip++) {
+                        if (stripbytecounts[strip] > stripsize) {
+                            tiffbuf = _TIFFrealloc(tiffbuf, stripbytecounts[strip]);
+                            stripsize = stripbytecounts[strip];
+                        }
+                        if (TIFFReadRawStrip(tif, strip, tiffbuf, stripbytecounts[strip]) < 0) {
+                            throw std::runtime_error("Failed to read compressed TIFF strip.");
+                        }
+
+                        // Used Adobe's version of libjpeg lossless codec
+                        dng_stream stream((uint8_t *) tiffbuf, stripsize);
+                        dng_spooler spooler;
+                        uint32_t decodedSize = width * height * sizeof(uint16_t);
+                        DecodeLosslessJPEG(stream, spooler,
+                                           decodedSize,
+                                           decodedSize,
+                                           false, stripsize);
+
+                        // The output of the JPEG decoder is always 16 bits
+                        process_tiff_strip(/*tiff_bitspersample=*/ 16, tiff_samplesperpixel, 0, height, (uint8_t *) spooler.data());
+                    }
+                    _TIFFfree(tiffbuf);
+                } else {
+                    // No compreession, read as a plain TIFF file
+
+                    readTiffImageData(tif, width, height, tiff_bitspersample, tiff_samplesperpixel, process_tiff_strip);
+                }
             }
         }
 

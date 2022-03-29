@@ -17,6 +17,7 @@
 #include <math.h>
 
 #include "demosaic.hpp"
+#include "gls_color_science.hpp"
 
 enum { red = 0, green = 1, blue = 2, green2 = 3 };
 
@@ -306,13 +307,13 @@ void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayer
 }
 
 // XYZ -> RGB Transform
-const float xyz_rgb[3][3] = {
+const double xyz_rgb[3][3] = {
     {0.4124564, 0.3575761, 0.1804375},
     {0.2126729, 0.7151522, 0.0721750},
     {0.0193339, 0.1191920, 0.9503041}
 };
 
-void pseudoinverse(double (*in)[3], double (*out)[3], int size) {
+void pseudoinverse(const double (*in)[3], double (*out)[3], int size) {
     double work[3][6], num;
     int i, j, k;
 
@@ -398,7 +399,12 @@ std::vector<T> getVector(const gls::tiff_metadata& metadata, const std::string& 
 
 gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
                                                         const gls::tiff_metadata& metadata) {
-    const auto color_matrix = getVector<float>(metadata, "ColorMatrix1");
+    const auto color_matrix1 = getVector<float>(metadata, "ColorMatrix1");
+    const auto color_matrix2 = getVector<float>(metadata, "ColorMatrix2");
+
+    // If present ColorMatrix2 is usually D65 and ColorMatrix1 is Standard Light A
+    const auto& color_matrix = color_matrix2.empty() ? color_matrix1 : color_matrix2;
+
     const auto as_shot_neutral = getVector<float>(metadata, "AsShotNeutral");
     const auto black_level_vec = getVector<float>(metadata, "BlackLevel");
     const auto white_level_vec = getVector<uint32_t>(metadata, "WhiteLevel");
@@ -417,17 +423,20 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
         cam_mul[i] = 1.0 / as_shot_neutral[i];
     }
 
-    float cam_rgb[3][3];
+    float cam_xyz[3][3];
     for (int j = 0; j < 3; j++) {
         for (int i = 0; i < 3; i++) {
-            cam_rgb[j][i] = color_matrix[3 * j + i];
+            // TODO: this should be CameraCalibration * ColorMatrix * AsShotWhite
+            cam_xyz[j][i] = color_matrix[3 * j + i];
         }
     }
 
     float rgb_cam[3][3];
     float pre_mul[4];
-    
-    cam_xyz_coeff(rgb_cam, pre_mul, cam_rgb);
+    cam_xyz_coeff(rgb_cam, pre_mul, cam_xyz);
+
+    printf("*** pre_mul: %f, %f, %f\n", pre_mul[0], pre_mul[1], pre_mul[2]);
+    printf("*** cam_mul: %f, %f, %f\n", cam_mul[0], cam_mul[1], cam_mul[2]);
 
     // If cam_mul is available use that instead of pre_mul
     for (int i = 0; i < 3; i++) {
@@ -449,6 +458,31 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
         printf("%f, ", pre_mul[i]);
     }
     printf("\n");
+
+    {
+        const float d65_white[3] = {0.95047f, 1.0f, 1.08883f};
+
+//        const float pre_mul[3] = {0.001394 / 0.001889, 0.001394 / 0.001394, 0.001394 / 0.002677};
+//
+//        const float balance[3] = {39.770055 / 40.130975, 40.130975 / 40.130975, 43.148461 / 40.130975};
+//
+//        printf("balance: %f, %f, %f\n", balance[0], balance[1], balance[2]);
+//
+//        double rgb_xyz[3][3];
+//        pseudoinverse(xyz_rgb, rgb_xyz, 3);
+//
+//        float cam_mul_xyz[3] = { 0, 0, 0 };
+//
+//        for (int j = 0; j < 3; j++) {
+//            for (int k = 0; k < 3; k++)
+//                cam_mul_xyz[j] += pre_mul[k] * rgb_xyz[k][j];
+//        }
+//
+//        printf("cam_mul_xyz: %f, %f, %f\n", cam_mul_xyz[0], cam_mul_xyz[1], cam_mul_xyz[2]);
+
+        float cct = XYZtoCorColorTemp(d65_white);
+        printf("*** Correlated Color Temperature: %f\n", cct);
+    }
 
     // Scale Input Image
     auto minmax = std::minmax_element(std::begin(pre_mul), std::end(pre_mul));
