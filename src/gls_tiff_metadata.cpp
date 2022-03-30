@@ -28,8 +28,13 @@ struct TiffFieldInfo {
     const char*         field_name;         /* ASCII name */
 };
 
+std::string getFieldName(const TIFFField* tf) {
+    const auto field_name = TIFFFieldName(tf);
+    return (field_name != nullptr) ? std::string(field_name) : std::to_string(TIFFFieldTag(tf));
+}
+
 template<class T>
-bool getMetaData(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata, const std::string& key) {
+bool getMetaData(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata) {
     const auto field_tag = TIFFFieldTag(tf);
     const auto field_readcount = TIFFFieldReadCount(tf);
 
@@ -56,7 +61,7 @@ bool getMetaData(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata, const 
             values[i] = data[i];
         }
 #ifdef DEBUG_TIFF_TAGS
-        std::cout << "New metadata vector (" << values.size() << ") " << key << ": ";
+        std::cout << "New metadata vector (" << values.size() << ") " << getFieldName(tf) << ": ";
         for (int i = 0; i < values.size() && i < 10; i++) {
             const auto& v = values[i];
             if (sizeof(v) == 1) {
@@ -72,21 +77,21 @@ bool getMetaData(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata, const 
         }
         std::cout << std::endl;
 #endif
-        metadata->insert({ key, values });
+        metadata->insert({ field_tag, values });
         return true;
     } else if (field_readcount == 1) {
         T data;
         TIFFGetField(tif, field_tag, &data);
 #ifdef DEBUG_TIFF_TAGS
-        std::cout << "New metadata scalar " << key << ": " << data << std::endl;
+        std::cout << "New metadata scalar " << getFieldName(tf) << ": " << data << std::endl;
 #endif
-        metadata->insert({ key, data });
+        metadata->insert({ field_tag, data });
         return true;
     }
     return false;
 }
 
-bool getMetaDataString(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata, const std::string& key) {
+bool getMetaDataString(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata) {
     const auto field_tag = TIFFFieldTag(tf);
     const auto field_readcount = TIFFFieldReadCount(tf);
 
@@ -101,9 +106,9 @@ bool getMetaDataString(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata, 
     }
 
 #ifdef DEBUG_TIFF_TAGS
-    std::cout << "New metadata string " << key << ": " << data << std::endl;
+    std::cout << "New metadata string " << getFieldName(tf) << ": " << data << std::endl;
 #endif
-    metadata->insert({ key, data });
+    metadata->insert({ field_tag, data });
 
     return true;
 }
@@ -111,58 +116,54 @@ bool getMetaDataString(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata, 
 void getMetadata(TIFF* tif, ttag_t field_tag, tiff_metadata* metadata) {
     const TIFFField* tf = TIFFFieldWithTag(tif, field_tag);
 
-    const auto field_name = TIFFFieldName(tf);
-
-    const std::string exifName = (field_name != nullptr) ? std::string(field_name) : std::to_string(field_tag);
-
     const auto field_type = TIFFFieldDataType(tf);
     switch (field_type) {
         case TIFF_BYTE: {
-            getMetaData<uint8_t>(tif, tf, metadata, exifName);
+            getMetaData<uint8_t>(tif, tf, metadata);
             break;
         }
         case TIFF_UNDEFINED: {
-            getMetaData<uint8_t>(tif, tf, metadata, exifName);
+            getMetaData<uint8_t>(tif, tf, metadata);
             break;
         }
         case TIFF_ASCII: {
-            getMetaDataString(tif, tf, metadata, exifName);
+            getMetaDataString(tif, tf, metadata);
             break;
         }
         case TIFF_SHORT: {
-            getMetaData<uint16_t>(tif, tf, metadata, exifName);
+            getMetaData<uint16_t>(tif, tf, metadata);
             break;
         }
         case TIFF_LONG: {
-            getMetaData<uint32_t>(tif, tf, metadata, exifName);
+            getMetaData<uint32_t>(tif, tf, metadata);
             break;
         }
         case TIFF_SBYTE: {
-            getMetaData<int8_t>(tif, tf, metadata, exifName);
+            getMetaData<int8_t>(tif, tf, metadata);
             break;
         }
         case TIFF_SSHORT: {
-            getMetaData<int16_t>(tif, tf, metadata, exifName);
+            getMetaData<int16_t>(tif, tf, metadata);
             break;
         }
         case TIFF_SLONG: {
-            getMetaData<int32_t>(tif, tf, metadata, exifName);
+            getMetaData<int32_t>(tif, tf, metadata);
             break;
         }
         case TIFF_SRATIONAL:
         case TIFF_RATIONAL:
         case TIFF_FLOAT: {
-            getMetaData<float>(tif, tf, metadata, exifName);
+            getMetaData<float>(tif, tf, metadata);
             break;
         }
         case TIFF_DOUBLE: {
-            getMetaData<double>(tif, tf, metadata, exifName);
+            getMetaData<double>(tif, tf, metadata);
             break;
         }
         case TIFF_IFD:
         case TIFF_IFD8:
 #ifdef DEBUG_TIFF_TAGS
-            std::cout << "Skipping offset field: " << field_name << std::endl;
+            std::cout << "Skipping offset field: " << getFieldName(tf) << std::endl;
 #endif
             break;
         default:
@@ -225,10 +226,10 @@ void setMetadataString(TIFF* tif, const TIFFField* tf, const tiff_metadata_item&
     }
 }
 
-void setMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& key) {
+void setMetadata(TIFF* tif, tiff_metadata* metadata, ttag_t key) {
     const auto entry = metadata->find(key);
     if (entry != metadata->end()) {
-        const TIFFField* tf = TIFFFieldWithName(tif, key.c_str());
+        const TIFFField* tf = TIFFFieldWithTag(tif, key);
         if (tf) {
             const auto field_type = TIFFFieldDataType(tf);
 
@@ -285,16 +286,8 @@ void setMetadata(TIFF* tif, tiff_metadata* metadata, const std::string& key) {
 // DNG Extension Tags
 
 static const TIFFFieldInfo xtiffFieldInfo[] = {
-//    { TIFFTAG_DNG_IMAGEWIDTH, -1, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "DNG ImageWidth" },
-//    { TIFFTAG_DNG_IMAGEHEIGHT, -1, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "DNG ImageHeight" },
-//    { TIFFTAG_DNG_BITSPERSAMPLE, -1, -1, TIFF_LONG, FIELD_CUSTOM, 1, 0, "DNG BitsPerSample" },
-
     { TIFFTAG_FORWARDMATRIX1, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "ForwardMatrix1" },
     { TIFFTAG_FORWARDMATRIX2, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "ForwardMatrix2" },
-
-    //    { TIFFTAG_TIMECODES, -1, -1, TIFF_BYTE, FIELD_CUSTOM, 1, 1, "TimeCodes" },
-//    { TIFFTAG_FRAMERATE, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "FrameRate" },
-//    { TIFFTAG_REELNAME, -1, -1, TIFF_ASCII, FIELD_CUSTOM, 1, 0, "ReelName" },
 
     { TIFFTAG_PROFILENAME, -1, -1, TIFF_ASCII, FIELD_CUSTOM, 1, 0, "ProfileName" },
     { TIFFTAG_PROFILELOOKTABLEDIMS, 3, 3, TIFF_LONG, FIELD_CUSTOM, 1, 0, "ProfileLookTableDims" },

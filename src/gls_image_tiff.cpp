@@ -401,24 +401,24 @@ void write_dng_file(const std::string& filename, int width, int height, int pixe
         TIFFSetField(tif, TIFFTAG_UNIQUECAMERAMODEL, "Glass 1");
 
         if (metadata) {
-            setMetadata(tif, metadata, "DateTime");
+            setMetadata(tif, metadata, TIFFTAG_DATETIME);
 
-            setMetadata(tif, metadata, "CFARepeatPatternDim");
-            setMetadata(tif, metadata, "CFAPattern");
+            setMetadata(tif, metadata, TIFFTAG_CFAREPEATPATTERNDIM);
+            setMetadata(tif, metadata, TIFFTAG_CFAPATTERN);
 
-            setMetadata(tif, metadata, "ColorMatrix1");
-            setMetadata(tif, metadata, "ColorMatrix2");
-            setMetadata(tif, metadata, "AsShotNeutral");
+            setMetadata(tif, metadata, TIFFTAG_COLORMATRIX1);
+            setMetadata(tif, metadata, TIFFTAG_COLORMATRIX2);
+            setMetadata(tif, metadata, TIFFTAG_ASSHOTNEUTRAL);
 
-            setMetadata(tif, metadata, "CalibrationIlluminant1");
-            setMetadata(tif, metadata, "CalibrationIlluminant2");
+            setMetadata(tif, metadata, TIFFTAG_CALIBRATIONILLUMINANT1);
+            setMetadata(tif, metadata, TIFFTAG_CALIBRATIONILLUMINANT2);
 
-            setMetadata(tif, metadata, "BlackLevelRepeatDim");
-            setMetadata(tif, metadata, "BlackLevel");
-            setMetadata(tif, metadata, "WhiteLevel");
+            setMetadata(tif, metadata, TIFFTAG_BLACKLEVELREPEATDIM);
+            setMetadata(tif, metadata, TIFFTAG_BLACKLEVEL);
+            setMetadata(tif, metadata, TIFFTAG_WHITELEVEL);
 
-            setMetadata(tif, metadata, "BayerGreenSplit");
-            setMetadata(tif, metadata, "BaselineExposure");
+            setMetadata(tif, metadata, TIFFTAG_BAYERGREENSPLIT);
+            setMetadata(tif, metadata, TIFFTAG_BASELINEEXPOSURE);
         }
 
         if (compression == COMPRESSION_JPEG) {

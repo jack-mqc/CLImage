@@ -30,22 +30,22 @@ inline uint16_t clamp(int x) { return x < 0 ? 0 : x > 0xffff ? 0xffff : x; }
 
 // IMX492 M43-ish Sony Sensor
 void IMX492Metadata(gls::tiff_metadata *metadata) {
-    metadata->insert({ "ColorMatrix1", std::vector<float>{ 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553 } });
-    metadata->insert({ "AsShotNeutral", std::vector<float>{ 0.7380, 1, 0.5207 } });
-    metadata->insert({ "CFARepeatPatternDim", std::vector<uint16_t>{ 2, 2 } });
-    metadata->insert({ "CFAPattern", std::vector<uint8_t>{ 1, 2, 0, 1 } });
-    metadata->insert({ "BlackLevel", std::vector<float>{ 0 } });
-    metadata->insert({ "WhiteLevel", std::vector<uint32_t>{ 0x0fff } });
+    metadata->insert({ TIFFTAG_COLORMATRIX1, std::vector<float>{ 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553 } });
+    metadata->insert({ TIFFTAG_ASSHOTNEUTRAL, std::vector<float>{ 0.7380, 1, 0.5207 } });
+    metadata->insert({ TIFFTAG_CFAREPEATPATTERNDIM, std::vector<uint16_t>{ 2, 2 } });
+    metadata->insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 1, 2, 0, 1 } });
+    metadata->insert({ TIFFTAG_BLACKLEVEL, std::vector<float>{ 0 } });
+    metadata->insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0x0fff } });
 }
 
 // IMX571 APS-C Sony Sensor
 void IMX571Metadata(gls::tiff_metadata *metadata) {
-    metadata->insert({ "ColorMatrix1", std::vector<float>{ 2.5251, -1.3908, -0.3936, -0.5996, 1.7697, -0.1700, 0.2232, -0.2430, 1.2527 } });
-    metadata->insert({ "AsShotNeutral", std::vector<float>{ 0.572128, 1.000000, 1.313796 } });
-    metadata->insert({ "CFARepeatPatternDim", std::vector<uint16_t>{ 2, 2 } });
-    metadata->insert({ "CFAPattern", std::vector<uint8_t>{ 2, 1, 1, 0 } });
-    metadata->insert({ "BlackLevel", std::vector<float>{ 0 } });
-    metadata->insert({ "WhiteLevel", std::vector<uint32_t>{ 0xffff } });
+    metadata->insert({ TIFFTAG_COLORMATRIX1, std::vector<float>{ 2.5251, -1.3908, -0.3936, -0.5996, 1.7697, -0.1700, 0.2232, -0.2430, 1.2527 } });
+    metadata->insert({ TIFFTAG_ASSHOTNEUTRAL, std::vector<float>{ 0.572128, 1.000000, 1.313796 } });
+    metadata->insert({ TIFFTAG_CFAREPEATPATTERNDIM, std::vector<uint16_t>{ 2, 2 } });
+    metadata->insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 2, 1, 1, 0 } });
+    metadata->insert({ TIFFTAG_BLACKLEVEL, std::vector<float>{ 0 } });
+    metadata->insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0xffff } });
 }
 
 int main(int argc, const char* argv[]) {
@@ -58,8 +58,8 @@ int main(int argc, const char* argv[]) {
 
         gls::tiff_metadata metadata;
         const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &metadata);
-        metadata["ColorMatrix1"] = std::vector<float>{ 2.5251, -1.3908, -0.3936, -0.5996, 1.7697, -0.1700, 0.2232, -0.2430, 1.2527 };
-        metadata["AsShotNeutral"] = std::vector<float>{ 0.572128, 1.000000, 1.313796 };
+        metadata[TIFFTAG_COLORMATRIX1] = std::vector<float>{ 2.5251, -1.3908, -0.3936, -0.5996, 1.7697, -0.1700, 0.2232, -0.2430, 1.2527 };
+        metadata[TIFFTAG_ASSHOTNEUTRAL] = std::vector<float>{ 0.572128, 1.000000, 1.313796 };
 
         inputImage->write_png_file((input_path.parent_path() / input_path.stem()).string() + ".png");
 

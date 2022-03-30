@@ -333,7 +333,7 @@ gls::Matrix<3, 3> cam_xyz_coeff(gls::Vector<4>& pre_mul, const gls::Matrix<3, 3>
 }
 
 template <typename T>
-std::vector<T> getVector(const gls::tiff_metadata& metadata, const std::string& key) {
+std::vector<T> getVector(const gls::tiff_metadata& metadata, ttag_t key) {
     const auto& entry = metadata.find(key);
     if (entry != metadata.end()) {
         return std::get<std::vector<T>>(metadata.find(key)->second);
@@ -343,16 +343,16 @@ std::vector<T> getVector(const gls::tiff_metadata& metadata, const std::string& 
 
 gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
                                                         const gls::tiff_metadata& metadata) {
-    const auto color_matrix1 = getVector<float>(metadata, "ColorMatrix1");
-    const auto color_matrix2 = getVector<float>(metadata, "ColorMatrix2");
+    const auto color_matrix1 = getVector<float>(metadata, TIFFTAG_COLORMATRIX1);
+    const auto color_matrix2 = getVector<float>(metadata, TIFFTAG_COLORMATRIX2);
 
     // If present ColorMatrix2 is usually D65 and ColorMatrix1 is Standard Light A
     const auto& color_matrix = color_matrix2.empty() ? color_matrix1 : color_matrix2;
 
-    const auto as_shot_neutral = getVector<float>(metadata, "AsShotNeutral");
-    const auto black_level_vec = getVector<float>(metadata, "BlackLevel");
-    const auto white_level_vec = getVector<uint32_t>(metadata, "WhiteLevel");
-    const auto cfa_pattern = getVector<uint8_t>(metadata, "CFAPattern");
+    const auto as_shot_neutral = getVector<float>(metadata, TIFFTAG_ASSHOTNEUTRAL);
+    const auto black_level_vec = getVector<float>(metadata, TIFFTAG_BLACKLEVEL);
+    const auto white_level_vec = getVector<uint32_t>(metadata, TIFFTAG_WHITELEVEL);
+    const auto cfa_pattern = getVector<uint8_t>(metadata, TIFFTAG_CFAPATTERN);
 
     const float black_level = black_level_vec.empty() ? 0 : black_level_vec[0];
     const uint32_t white_level = white_level_vec.empty() ? 0xffff : white_level_vec[0];
