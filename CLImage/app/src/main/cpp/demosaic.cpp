@@ -22,12 +22,12 @@
 
 enum { red = 0, green = 1, blue = 2, green2 = 3 };
 
-static const std::array<std::array<gls::point, 4>, 4> bayerOffsets = {
-    std::array<gls::point, 4> { gls::point{1, 0}, gls::point{0, 0}, gls::point{0, 1}, gls::point{1, 1} }, // grbg
-    std::array<gls::point, 4> { gls::point{0, 1}, gls::point{0, 0}, gls::point{1, 0}, gls::point{1, 1} }, // gbrg
-    std::array<gls::point, 4> { gls::point{0, 0}, gls::point{1, 0}, gls::point{1, 1}, gls::point{0, 1} }, // rggb
-    std::array<gls::point, 4> { gls::point{1, 1}, gls::point{1, 0}, gls::point{0, 0}, gls::point{0, 1} }  // bggr
-};
+static const std::array<std::array<gls::point, 4>, 4> bayerOffsets = {{
+    { gls::point{1, 0}, gls::point{0, 0}, gls::point{0, 1}, gls::point{1, 1} }, // grbg
+    { gls::point{0, 1}, gls::point{0, 0}, gls::point{1, 0}, gls::point{1, 1} }, // gbrg
+    { gls::point{0, 0}, gls::point{1, 0}, gls::point{1, 1}, gls::point{0, 1} }, // rggb
+    { gls::point{1, 1}, gls::point{1, 0}, gls::point{0, 0}, gls::point{0, 1} }  // bggr
+}};
 
 inline uint16_t clamp(int x) { return x < 0 ? 0 : x > 0xffff ? 0xffff : x; }
 
@@ -308,23 +308,23 @@ void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayer
 }
 
 // XYZ -> RGB Transform
-const gls::Matrix<3, 3> xyz_rgb = {
+const gls::Matrix<3, 3> xyz_rgb({
     { 0.4124564, 0.3575761, 0.1804375 },
     { 0.2126729, 0.7151522, 0.0721750 },
     { 0.0193339, 0.1191920, 0.9503041 }
-};
+});
 
 gls::Matrix<3, 3> cam_xyz_coeff(gls::Vector<4>& pre_mul, const gls::Matrix<3, 3>& cam_xyz) {
     auto cam_rgb = cam_xyz * xyz_rgb;
 
-    // Normalize cam_rgb so that cam_rgb * (1,1,1) is (1,1,1)
-    auto norm = cam_rgb * gls::Vector<3> { 1, 1, 1 };
+    // Normalize cam_rgb so that cam_rgb * (1,1,1) == (1,1,1)
+    auto norm = cam_rgb * gls::Vector<3>({ 1, 1, 1 });
     for (int i = 0; i < 3; i++) {
         if (norm[i] > 0.00001) {
             cam_rgb[i] = cam_rgb[i] / norm[i];
             pre_mul[i] = 1 / norm[i];
         } else {
-            cam_rgb[i] = { 0, 0, 0 };
+            cam_rgb[i] = gls::Vector<3>({ 0, 0, 0 });
             pre_mul[i] = 1;
         }
     }
@@ -434,7 +434,7 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     for (int y = 0; y < rgbImage->height; y++) {
         for (int x = 0; x < rgbImage->width; x++) {
             auto& p = (*rgbImage)[y][x];
-            const auto op = rgb_cam * gls::Vector<3>{ (float) p[0], (float) p[1], (float) p[2] };
+            const auto op = rgb_cam * gls::Vector<3>({ (float) p[0], (float) p[1], (float) p[2] });
             p = { clamp(op[0]), clamp(op[1]), clamp(op[2]) };
         }
     }

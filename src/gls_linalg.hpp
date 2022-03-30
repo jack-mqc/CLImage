@@ -21,9 +21,23 @@
 
 namespace gls {
 
+template<int M, int N> struct Matrix;
+
 // ---- Vector Type ----
 template <int N>
-struct Vector : std::array<float, N> {
+struct Vector : public std::array<float, N> {
+    Vector() { }
+
+    Vector(const float(&il)[N]) {
+        std::copy(il, il + N, this->begin());
+    }
+
+    template<int P, int Q>
+    requires (P * Q == N)
+    Vector(const Matrix<P, Q>& m) {
+        const auto ms = m.span();
+        std::copy(ms.begin(), ms.end(), this->begin());
+    }
 };
 
 // Vector - Scalar Addition
@@ -35,7 +49,7 @@ inline Vector<N> operator + (const Vector<N>& v, const float a) {
     return result;
 }
 
-// Vector - Scalar Suntraction
+// Vector - Scalar Subtraction
 template <int N>
 inline Vector<N> operator - (const Vector<N>& v, const float a) {
     auto itv = v.begin();
@@ -72,17 +86,13 @@ struct Matrix : public std::array<Vector<M>, N> {
         std::copy(v.begin(), v.end(), span().begin());
     }
 
-    Matrix(std::initializer_list<float> il) {
-        assert(il.size() == N * M);
-        std::copy(il.begin(), il.end(), span().begin());
+    Matrix(const float(&il)[N * M]) {
+        std::copy(il, il + (N * M), span().begin());
     }
 
-    Matrix(std::initializer_list<Vector<M>> il) {
-        assert(il.size() == N);
-        int row = 0;
-        for (const auto& v : il) {
-            std::copy(v.begin(), v.end(), span(row++).begin());
-        }
+    Matrix(const std::array<float, M>(&il)[N]) {
+        // This is safe, il is just an array of arrays
+        std::copy((float *) il, (float *) il + (N * M), span().begin());
     }
 
     // Matrix Raw Data
@@ -101,14 +111,6 @@ struct Matrix : public std::array<Vector<M>, N> {
 
     const std::span<const float> span(int row) const {
         return std::span(&(*this)[row][0], M);
-    }
-
-    // Cast to a Vector
-    operator Vector<N * M>() const {
-        const auto s = span();
-        Vector<N * M> result;
-        std::copy(s.begin(), s.end(), result.begin());
-        return result;
     }
 };
 
@@ -150,12 +152,14 @@ inline Matrix<M, N> operator * (const Matrix<M, K>& a, const Matrix<K, N>& b) {
     return result;
 }
 
+// Matrix - Vector Multiplication
 template <int M, int N>
 inline Vector<M> operator * (const Matrix<M, N>& a, const Vector<N>& b) {
     const auto result = a * Matrix<N, 1> { b };
     return Vector<M>(result);
 }
 
+// Vector - Matrix Multiplication
 template <int M, int N>
 inline Vector<N> operator * (const Vector<M>& a, const Matrix<M, N>& b) {
     const auto result = Matrix<1, N> { a } * b;
@@ -320,7 +324,7 @@ inline Matrix<N, N> adjoint(const Matrix<N, N>& m) {
 // Matrix Adjoint - Special case for size 1x1
 template <>
 inline Matrix<1, 1> adjoint(const Matrix<1, 1>& m) {
-    return { 1 };
+    return { { 1 } };
 }
 
 // Inverse Matrix: inverse(m) = adj(m)/det(m)
