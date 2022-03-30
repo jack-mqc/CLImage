@@ -18,6 +18,7 @@
 
 #include "demosaic.hpp"
 #include "gls_color_science.hpp"
+#include "gls_linalg.hpp"
 
 enum { red = 0, green = 1, blue = 2, green2 = 3 };
 
@@ -307,13 +308,13 @@ void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayer
 }
 
 // XYZ -> RGB Transform
-const double xyz_rgb[3][3] = {
+const float xyz_rgb[3][3] = {
     {0.4124564, 0.3575761, 0.1804375},
     {0.2126729, 0.7151522, 0.0721750},
     {0.0193339, 0.1191920, 0.9503041}
 };
 
-void pseudoinverse(const double (*in)[3], double (*out)[3], int size) {
+void pseudoinverse(const float (*in)[3], float (*out)[3], int size) {
     double work[3][6], num;
     int i, j, k;
 
@@ -353,7 +354,7 @@ void pseudoinverse(const double (*in)[3], double (*out)[3], int size) {
 }
 
 void cam_xyz_coeff(float rgb_cam[3][3], float pre_mul[3], const float cam_xyz[3][3]) {
-    double cam_rgb[3][3];
+    float cam_rgb[3][3];
     for (int i = 0; i < 3; i++) /* Multiply out XYZ colorspace */
         for (int j = 0; j < 3; j++) {
             cam_rgb[i][j] = 0;
@@ -378,7 +379,7 @@ void cam_xyz_coeff(float rgb_cam[3][3], float pre_mul[3], const float cam_xyz[3]
         }
     }
 
-    double inverse[3][3];
+    float inverse[3][3];
     pseudoinverse(cam_rgb, inverse, 3);
 
     for (int i = 0; i < 3; i++) {
@@ -459,30 +460,43 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     }
     printf("\n");
 
-    {
-        const float d65_white[3] = {0.95047f, 1.0f, 1.08883f};
-
-//        const float pre_mul[3] = {0.001394 / 0.001889, 0.001394 / 0.001394, 0.001394 / 0.002677};
+//    {
+//        const gls::Matrix<1, 4> d65_white = {0.95047f, 1.0f, 1.08883f, 1};
+//        const gls::Matrix<4, 1> d50_white = {0.9642, 1.0000, 0.8249, 1};
 //
-//        const float balance[3] = {39.770055 / 40.130975, 40.130975 / 40.130975, 43.148461 / 40.130975};
+//        gls::Matrix<4, 4> M = {
+//            5,  -2,  2,  7,
+//            1,   0,  0,  3,
+//           -3,   1,  5,  0,
+//            3,  -1, -9,  4,
+//        };
 //
-//        printf("balance: %f, %f, %f\n", balance[0], balance[1], balance[2]);
+//        gls::Matrix<4, 4> I = {
+//            1, 0, 0, 0,
+//            0, 1, 0, 0,
+//            0, 0, 1, 0,
+//            0, 0, 0, 1
+//        };
 //
-//        double rgb_xyz[3][3];
-//        pseudoinverse(xyz_rgb, rgb_xyz, 3);
+//        const auto R = d65_white * (M + I) * d50_white;
 //
-//        float cam_mul_xyz[3] = { 0, 0, 0 };
+//        print("M", R);
 //
-//        for (int j = 0; j < 3; j++) {
-//            for (int k = 0; k < 3; k++)
-//                cam_mul_xyz[j] += pre_mul[k] * rgb_xyz[k][j];
-//        }
+//        print("cofactor", gls::cofactor(M, 0, 0));
 //
-//        printf("cam_mul_xyz: %f, %f, %f\n", cam_mul_xyz[0], cam_mul_xyz[1], cam_mul_xyz[2]);
-
-        float cct = XYZtoCorColorTemp(d65_white);
-        printf("*** Correlated Color Temperature: %f\n", cct);
-    }
+//        printf("determinant(M): %f\n", gls::determinant(M));
+//
+//        print("adjoint(M)", gls::adjoint(M));
+//
+//        print("inverse(M)", gls::inverse(M));
+//
+//        print("M / I", M / I);
+//
+//        print("I * 2", I * 2);
+//
+//        float cct = XYZtoCorColorTemp(cam_mul_xyz);
+//        printf("*** Correlated Color Temperature: %f\n", cct);
+//    }
 
     // Scale Input Image
     auto minmax = std::minmax_element(std::begin(pre_mul), std::end(pre_mul));

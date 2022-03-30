@@ -22,6 +22,8 @@
 #include "demosaic.hpp"
 #include "gls_tiff_metadata.hpp"
 
+#include "gls_linalg.hpp"
+
 static const char* TAG = "RawPipeline Test";
 
 inline uint16_t clamp(int x) { return x < 0 ? 0 : x > 0xffff ? 0xffff : x; }
@@ -56,8 +58,8 @@ int main(int argc, const char* argv[]) {
 
         gls::tiff_metadata metadata;
         const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &metadata);
-//        metadata["ColorMatrix1"] = std::vector<float>{ 2.5251, -1.3908, -0.3936, -0.5996, 1.7697, -0.1700, 0.2232, -0.2430, 1.2527 };
-//        metadata["AsShotNeutral"] = std::vector<float>{ 0.572128, 1.000000, 1.313796 };
+        metadata["ColorMatrix1"] = std::vector<float>{ 2.5251, -1.3908, -0.3936, -0.5996, 1.7697, -0.1700, 0.2232, -0.2430, 1.2527 };
+        metadata["AsShotNeutral"] = std::vector<float>{ 0.572128, 1.000000, 1.313796 };
 
         inputImage->write_png_file((input_path.parent_path() / input_path.stem()).string() + ".png");
 

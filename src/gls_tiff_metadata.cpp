@@ -17,6 +17,8 @@
 
 #include <iostream>
 
+// #define DEBUG_TIFF_TAGS 1
+
 namespace gls {
 
 struct TiffFieldInfo {
@@ -53,8 +55,7 @@ bool getMetaData(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata, const 
         for (unsigned i = 0; i < count; i++) {
             values[i] = data[i];
         }
-
-        const auto field_type = TIFFFieldDataType(tf);
+#ifdef DEBUG_TIFF_TAGS
         std::cout << "New metadata vector (" << values.size() << ") " << key << ": ";
         for (int i = 0; i < values.size() && i < 10; i++) {
             const auto& v = values[i];
@@ -70,15 +71,15 @@ bool getMetaData(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata, const 
             }
         }
         std::cout << std::endl;
-
+#endif
         metadata->insert({ key, values });
         return true;
     } else if (field_readcount == 1) {
         T data;
         TIFFGetField(tif, field_tag, &data);
-
+#ifdef DEBUG_TIFF_TAGS
         std::cout << "New metadata scalar " << key << ": " << data << std::endl;
-
+#endif
         metadata->insert({ key, data });
         return true;
     }
@@ -99,7 +100,9 @@ bool getMetaDataString(TIFF* tif, const TIFFField* tf, tiff_metadata* metadata, 
         TIFFGetField(tif, field_tag, &data);
     }
 
+#ifdef DEBUG_TIFF_TAGS
     std::cout << "New metadata string " << key << ": " << data << std::endl;
+#endif
     metadata->insert({ key, data });
 
     return true;
@@ -158,7 +161,9 @@ void getMetadata(TIFF* tif, ttag_t field_tag, tiff_metadata* metadata) {
         }
         case TIFF_IFD:
         case TIFF_IFD8:
+#ifdef DEBUG_TIFF_TAGS
             std::cout << "Skipping offset field: " << field_name << std::endl;
+#endif
             break;
         default:
             throw std::runtime_error("Unknown TIFF field type: " + std::to_string(field_type));

@@ -88,6 +88,7 @@
 		E5AB79A027F159A7008B3D30 /* gls_dng_lossless_jpeg.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = gls_dng_lossless_jpeg.cpp; path = ../../src/gls_dng_lossless_jpeg.cpp; sourceTree = "<group>"; };
 		E5AB79A327F21A44008B3D30 /* gls_color_science.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = gls_color_science.cpp; path = ../../src/gls_color_science.cpp; sourceTree = "<group>"; };
 		E5AB79A427F21A44008B3D30 /* gls_color_science.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = gls_color_science.hpp; path = ../../src/gls_color_science.hpp; sourceTree = "<group>"; };
+		E5AB79A927F2E9E8008B3D30 /* gls_linalg.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = gls_linalg.hpp; path = ../../src/gls_linalg.hpp; sourceTree = "<group>"; };
 		E5AD623C27616ABA0055F712 /* CLImageTest */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CLImageTest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5AD624927616D7E0055F712 /* libpng.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpng.dylib; path = CLImageTest/libs/libpng.dylib; sourceTree = "<group>"; };
 		E5AD624A27616D7E0055F712 /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = CLImageTest/libs/libz.dylib; sourceTree = "<group>"; };
@@ -198,6 +199,7 @@
 		E5AD6273276174DA0055F712 /* climage */ = {
 			isa = PBXGroup;
 			children = (
+				E5AB79A927F2E9E8008B3D30 /* gls_linalg.hpp */,
 				E5AD627C276174FC0055F712 /* gls_cl_error.cpp */,
 				E5AD627A276174FC0055F712 /* gls_cl_image.hpp */,
 				E5AD6276276174FC0055F712 /* gls_cl.cpp */,
@@ -380,11 +382,13 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = NO;
+				GCC_VERSION = "";
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/CLImageTest/libs",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -397,11 +401,13 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = NO;
+				GCC_VERSION = "";
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/CLImageTest/libs",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
