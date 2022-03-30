@@ -21,8 +21,71 @@
 
 namespace gls {
 
+// ---- Vector Type ----
+template <int N>
+struct Vector : std::array<float, N> {
+};
+
+// Vector - Scalar Addition
+template <int N>
+inline Vector<N> operator + (const Vector<N>& v, const float a) {
+    auto itv = v.begin();
+    Vector<N> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](float &r){ r = *itv++ + a; });
+    return result;
+}
+
+// Vector - Scalar Suntraction
+template <int N>
+inline Vector<N> operator - (const Vector<N>& v, const float a) {
+    auto itv = v.begin();
+    Vector<N> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](float &r){ r = *itv++ - a; });
+    return result;
+}
+
+// Vector - Scalar Multiplication
+template <int N>
+inline Vector<N> operator * (const Vector<N>& v, const float a) {
+    auto itv = v.begin();
+    Vector<N> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](float &r){ r = *itv++ * a; });
+    return result;
+}
+
+// Vector - Scalar Division
+template <int N>
+inline Vector<N> operator / (const Vector<N>& v, const float a) {
+    auto itv = v.begin();
+    Vector<N> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](float &r){ r = *itv++ / a; });
+    return result;
+}
+
+// ---- Matrix Type ----
+
 template <int N, int M>
-struct Matrix : std::array<std::array<float, M>, N> {
+struct Matrix : public std::array<Vector<M>, N> {
+    Matrix() {}
+
+    Matrix(const Vector<N * M>& v) {
+        std::copy(v.begin(), v.end(), span().begin());
+    }
+
+    Matrix(std::initializer_list<float> il) {
+        assert(il.size() == N * M);
+        std::copy(il.begin(), il.end(), span().begin());
+    }
+
+    Matrix(std::initializer_list<Vector<M>> il) {
+        assert(il.size() == N);
+        int row = 0;
+        for (const auto& v : il) {
+            std::copy(v.begin(), v.end(), span(row++).begin());
+        }
+    }
+
+    // Matrix Raw Data
     std::span<float> span() {
         return std::span(&(*this)[0][0], N * M);
     }
@@ -30,9 +93,34 @@ struct Matrix : std::array<std::array<float, M>, N> {
     const std::span<const float> span() const {
         return std::span(&(*this)[0][0], N * M);
     }
+
+    // Matrix Row Raw Data
+    std::span<float> span(int row) {
+        return std::span(&(*this)[row][0], M);
+    }
+
+    const std::span<const float> span(int row) const {
+        return std::span(&(*this)[row][0], M);
+    }
+
+    // Cast to a Vector
+    operator Vector<N * M>() const {
+        const auto s = span();
+        Vector<N * M> result;
+        std::copy(s.begin(), s.end(), result.begin());
+        return result;
+    }
 };
 
-typedef Matrix<3, 3> Mat;
+template <int N, int M>
+std::span<float> span(Matrix<N, M>& m) {
+    return std::span(&m[0][0], N * M);
+}
+
+template <int N, int M>
+const std::span<const float> span(const Matrix<N, M>& m) {
+    return std::span(&m[0][0], N * M);
+}
 
 // Matrix Transpose
 template<int N, int M>
@@ -53,12 +141,25 @@ inline Matrix<M, N> operator * (const Matrix<M, K>& a, const Matrix<K, N>& b) {
     const auto bt = transpose(b);
     for (int j = 0; j < M; j++) {
         for (int i = 0; i < N; i++) {
+            result[j][i] = 0;
             for (int k = 0; k < K; k++) {
                 result[j][i] += a[j][k] * bt[i][k];
             }
         }
     }
     return result;
+}
+
+template <int M, int N>
+inline Vector<M> operator * (const Matrix<M, N>& a, const Vector<N>& b) {
+    const auto result = a * Matrix<N, 1> { b };
+    return Vector<M>(result);
+}
+
+template <int M, int N>
+inline Vector<N> operator * (const Vector<M>& a, const Matrix<M, N>& b) {
+    const auto result = Matrix<1, N> { a } * b;
+    return Vector<N>(result);
 }
 
 // (Square) Matrix Division (Multiplication with Inverse)
@@ -71,9 +172,9 @@ inline Matrix<N, N> operator / (const Matrix<N, N>& a, const Matrix<N, N>& b) {
 template<int N, int M>
 inline Matrix<N, M> apply(const Matrix<M, N>& a, const Matrix<M, N>& b, float (*f)(const float& a, const float& b)) {
     Matrix<N, M> result;
-    auto ita = a.span().begin();
-    auto itb = b.span().begin();
-    for (auto& r : result.span()) {
+    auto ita = span(a).begin();
+    auto itb = span(b).begin();
+    for (auto& r : span(result)) {
         r = f(*ita++, *itb++);
     }
     return result;
@@ -83,8 +184,8 @@ inline Matrix<N, M> apply(const Matrix<M, N>& a, const Matrix<M, N>& b, float (*
 template<int N, int M>
 inline Matrix<N, M> apply(const Matrix<M, N>& a, float b, float (*f)(const float& a, float b)) {
     Matrix<N, M> result;
-    auto ita = a.span().begin();
-    for (auto& r : result.span()) {
+    auto ita = span(a).begin();
+    for (auto& r : span(result)) {
         r = f(*ita++, b);
     }
     return result;
@@ -241,21 +342,25 @@ inline Matrix<N, N> inverse(const Matrix<N, N>& m) {
 
 // --- Utility Functions ---
 
-template <int N, int M>
-inline void print(const Matrix<N, M>& m) {
-    for (int j = 0; j < N; j++) {
-        for (int i = 0; i < M; i++) {
-            std::cout << m[j][i] << ", ";
-        }
-        std::cout << std::endl;
+template <int N>
+std::ostream& operator<<(std::ostream& os, const Vector<N>& v) {
+    for (int i = 0; i < N; i++) {
+        os << v[i] << ", ";
     }
-    std::cout << std::endl;
+    return os;
 }
 
 template <int N, int M>
-inline void print(const char* s, const Matrix<N, M>& m) {
-    std::cout << s << ":" << std::endl;
-    print(m);
+std::ostream& operator<<(std::ostream& os, const Matrix<N, M>& m) {
+    for (int j = 0; j < N; j++) {
+        for (int i = 0; i < M; i++) {
+            os << m[j][i] << ", ";
+        }
+        if (j < N-1) {
+            os << std::endl;
+        }
+    }
+    return os;
 }
 
 }  // namespace gls

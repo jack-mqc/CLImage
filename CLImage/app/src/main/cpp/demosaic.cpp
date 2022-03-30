@@ -308,85 +308,28 @@ void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayer
 }
 
 // XYZ -> RGB Transform
-const float xyz_rgb[3][3] = {
-    {0.4124564, 0.3575761, 0.1804375},
-    {0.2126729, 0.7151522, 0.0721750},
-    {0.0193339, 0.1191920, 0.9503041}
+const gls::Matrix<3, 3> xyz_rgb = {
+    { 0.4124564, 0.3575761, 0.1804375 },
+    { 0.2126729, 0.7151522, 0.0721750 },
+    { 0.0193339, 0.1191920, 0.9503041 }
 };
 
-void pseudoinverse(const float (*in)[3], float (*out)[3], int size) {
-    double work[3][6], num;
-    int i, j, k;
+gls::Matrix<3, 3> cam_xyz_coeff(gls::Vector<4>& pre_mul, const gls::Matrix<3, 3>& cam_xyz) {
+    auto cam_rgb = cam_xyz * xyz_rgb;
 
-    for (i = 0; i < 3; i++) {
-        for (j = 0; j < 6; j++) {
-            work[i][j] = j == i + 3;
-        }
-        for (j = 0; j < 3; j++) {
-            for (k = 0; k < size && k < 4; k++) {
-                work[i][j] += in[k][i] * in[k][j];
-            }
-        }
-    }
-    for (i = 0; i < 3; i++) {
-        num = work[i][i];
-        for (j = 0; j < 6; j++) {
-            if (fabs(num) > 0.00001f) {
-                work[i][j] /= num;
-            }
-        }
-        for (k = 0; k < 3; k++) {
-            if (k == i)
-                continue;
-            num = work[k][i];
-            for (j = 0; j < 6; j++) {
-                work[k][j] -= work[i][j] * num;
-            }
-        }
-    }
-    for (i = 0; i < size && i < 4; i++) {
-        for (j = 0; j < 3; j++) {
-            for (out[i][j] = k = 0; k < 3; k++) {
-                out[i][j] += work[j][k + 3] * in[i][k];
-            }
-        }
-    }
-}
-
-void cam_xyz_coeff(float rgb_cam[3][3], float pre_mul[3], const float cam_xyz[3][3]) {
-    float cam_rgb[3][3];
-    for (int i = 0; i < 3; i++) /* Multiply out XYZ colorspace */
-        for (int j = 0; j < 3; j++) {
-            cam_rgb[i][j] = 0;
-            for (int k = 0; k < 3; k++)
-                cam_rgb[i][j] += cam_xyz[i][k] * xyz_rgb[k][j];
-        }
-
-    for (int i = 0; i < 3; i++) { /* Normalize cam_rgb so that */
-        double num = 0;
-        for (int j = 0; j < 3; j++) /* cam_rgb * (1,1,1) is (1,1,1,1) */
-            num += cam_rgb[i][j];
-        if (num > 0.00001) {
-            for (int j = 0; j < 3; j++) {
-                cam_rgb[i][j] /= num;
-            }
-            pre_mul[i] = 1 / num;
-        } else {
-            for (int j = 0; j < 3; j++) {
-                cam_rgb[i][j] = 0.0;
-            }
-            pre_mul[i] = 1.0;
-        }
-    }
-
-    float inverse[3][3];
-    pseudoinverse(cam_rgb, inverse, 3);
-
+    // Normalize cam_rgb so that cam_rgb * (1,1,1) is (1,1,1)
+    auto norm = cam_rgb * gls::Vector<3> { 1, 1, 1 };
     for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
-            rgb_cam[i][j] = inverse[j][i];
+        if (norm[i] > 0.00001) {
+            cam_rgb[i] = cam_rgb[i] / norm[i];
+            pre_mul[i] = 1 / norm[i];
+        } else {
+            cam_rgb[i] = { 0, 0, 0 };
+            pre_mul[i] = 1;
         }
     }
+
+    return inverse(cam_rgb);
 }
 
 template <typename T>
@@ -419,12 +362,12 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
                             : std::memcmp(cfa_pattern.data(), "\01\00\02\01", 4) == 0 ? BayerPattern::grbg
                             : BayerPattern::gbrg;
 
-    float cam_mul[3];
+    gls::Vector<3> cam_mul;
     for (int i = 0; i < 3; i++) {
         cam_mul[i] = 1.0 / as_shot_neutral[i];
     }
 
-    float cam_xyz[3][3];
+    gls::Matrix<3, 3> cam_xyz;
     for (int j = 0; j < 3; j++) {
         for (int i = 0; i < 3; i++) {
             // TODO: this should be CameraCalibration * ColorMatrix * AsShotWhite
@@ -432,12 +375,13 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
         }
     }
 
-    float rgb_cam[3][3];
-    float pre_mul[4];
-    cam_xyz_coeff(rgb_cam, pre_mul, cam_xyz);
+    std::cout << "cam_xyz:\n" << cam_xyz << std::endl;
 
-    printf("*** pre_mul: %f, %f, %f\n", pre_mul[0], pre_mul[1], pre_mul[2]);
-    printf("*** cam_mul: %f, %f, %f\n", cam_mul[0], cam_mul[1], cam_mul[2]);
+    gls::Vector<4> pre_mul;
+    const auto rgb_cam = cam_xyz_coeff(pre_mul, cam_xyz);
+
+    std::cout << "*** pre_mul: " << pre_mul << std::endl;
+    std::cout << "*** cam_mul: " << cam_mul << std::endl;
 
     // If cam_mul is available use that instead of pre_mul
     for (int i = 0; i < 3; i++) {
@@ -445,54 +389,12 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     }
     pre_mul[3] = pre_mul[1];
 
-    printf("rgb_cam: \n");
-    for (int j = 0; j < 3; j++) {
-        for (int i = 0; i < 3; i++) {
-            printf("%f, ", rgb_cam[j][i]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-
-    printf("pre_mul: \n");
-    for (int i = 0; i < 4; i++) {
-        printf("%f, ", pre_mul[i]);
-    }
-    printf("\n");
+    std::cout << "rgb_cam:\n" << rgb_cam << std::endl;
+    std::cout << "--> pre_mul: " << pre_mul << std::endl;
 
 //    {
 //        const gls::Matrix<1, 4> d65_white = {0.95047f, 1.0f, 1.08883f, 1};
 //        const gls::Matrix<4, 1> d50_white = {0.9642, 1.0000, 0.8249, 1};
-//
-//        gls::Matrix<4, 4> M = {
-//            5,  -2,  2,  7,
-//            1,   0,  0,  3,
-//           -3,   1,  5,  0,
-//            3,  -1, -9,  4,
-//        };
-//
-//        gls::Matrix<4, 4> I = {
-//            1, 0, 0, 0,
-//            0, 1, 0, 0,
-//            0, 0, 1, 0,
-//            0, 0, 0, 1
-//        };
-//
-//        const auto R = d65_white * (M + I) * d50_white;
-//
-//        print("M", R);
-//
-//        print("cofactor", gls::cofactor(M, 0, 0));
-//
-//        printf("determinant(M): %f\n", gls::determinant(M));
-//
-//        print("adjoint(M)", gls::adjoint(M));
-//
-//        print("inverse(M)", gls::inverse(M));
-//
-//        print("M / I", M / I);
-//
-//        print("I * 2", I * 2);
 //
 //        float cct = XYZtoCorColorTemp(cam_mul_xyz);
 //        printf("*** Correlated Color Temperature: %f\n", cct);
@@ -500,7 +402,7 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
 
     // Scale Input Image
     auto minmax = std::minmax_element(std::begin(pre_mul), std::end(pre_mul));
-    std::array<float, 4> scale_mul;
+    gls::Vector<4> scale_mul;
     for (int c = 0; c < 4; c++) {
         printf("pre_mul[c]: %f, *minmax.second: %f, white_level: %d\n", pre_mul[c], *minmax.second, white_level);
         scale_mul[c] = (pre_mul[c] / *minmax.first) * 65535.0 / (white_level - black_level);
@@ -532,39 +434,10 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     for (int y = 0; y < rgbImage->height; y++) {
         for (int x = 0; x < rgbImage->width; x++) {
             auto& p = (*rgbImage)[y][x];
-            p = {
-                clamp(p[0] * rgb_cam[0][0] + p[1] * rgb_cam[0][1] + p[2] * rgb_cam[0][2]),
-                clamp(p[0] * rgb_cam[1][0] + p[1] * rgb_cam[1][1] + p[2] * rgb_cam[1][2]),
-                clamp(p[0] * rgb_cam[2][0] + p[1] * rgb_cam[2][1] + p[2] * rgb_cam[2][2])
-            };
+            const auto op = rgb_cam * gls::Vector<3>{ (float) p[0], (float) p[1], (float) p[2] };
+            p = { clamp(op[0]), clamp(op[1]), clamp(op[2]) };
         }
     }
 
     return rgbImage;
 }
-
-#if 0
-int main(int argc, const char* argv[]) {
-    printf("Hello CLImage!\n");
-
-    if (argc > 1) {
-        auto input_path = std::filesystem::path(argv[1]);
-        auto input_dir = input_path.parent_path();
-
-        std::cout << "Processing: " << input_path.filename() << std::endl;
-
-        // Read the input file into an image object
-        auto inputImage = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
-
-        const auto rgb_image = demosaicImage(*inputImage);
-
-        rgb_image->write_png_file(input_path.replace_extension("_rgb.png").c_str());
-
-        std::cout << "done with inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
-
-        auto output_file = input_path.replace_extension(".dng").c_str();
-
-        inputImage->write_dng_file(output_file);
-    }
-}
-#endif
