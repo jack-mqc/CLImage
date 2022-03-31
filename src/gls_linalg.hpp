@@ -32,13 +32,48 @@ struct Vector : public std::array<float, N> {
         std::copy(il, il + N, this->begin());
     }
 
+    Vector(const std::vector<float>& v) {
+        assert(v.size() == N);
+        std::copy(v.begin(), v.end(), this->begin());
+    }
+
+    Vector(std::initializer_list<float> list) {
+        assert(list.size() == N);
+        std::copy(list.begin(), list.end(), this->begin());
+    }
+
     template<int P, int Q>
     requires (P * Q == N)
     Vector(const Matrix<P, Q>& m) {
         const auto ms = m.span();
         std::copy(ms.begin(), ms.end(), this->begin());
     }
+
+    // Cast to a const float*
+    operator const float*() const {
+        return this->data();
+    }
 };
+
+// Vector - Vector Multiplication (component-wise)
+template <int N>
+inline Vector<N> operator * (const Vector<N>& a, const Vector<N>& b) {
+    auto ita = a.begin();
+    auto itb = b.begin();
+    Vector<N> result;
+    std::for_each(result.begin(), result.end(), [&](float &r){ r = *ita++ * *itb++; });
+    return result;
+}
+
+// Vector - Vector Division (component-wise)
+template <int N>
+inline Vector<N> operator / (const Vector<N>& a, const Vector<N>& b) {
+    auto ita = a.begin();
+    auto itb = b.begin();
+    Vector<N> result;
+    std::for_each(result.begin(), result.end(), [&](float &r){ r = *ita++ / *itb++; });
+    return result;
+}
 
 // Vector - Scalar Addition
 template <int N>
@@ -49,12 +84,27 @@ inline Vector<N> operator + (const Vector<N>& v, const float a) {
     return result;
 }
 
+// Vector - Scalar Addition (commutative)
+template <int N>
+inline Vector<N> operator + (const float a, const Vector<N>& v) {
+    return v + a;
+}
+
 // Vector - Scalar Subtraction
 template <int N>
 inline Vector<N> operator - (const Vector<N>& v, const float a) {
     auto itv = v.begin();
     Vector<N> result;
     std::for_each(result.begin(), result.end(), [&a, &itv](float &r){ r = *itv++ - a; });
+    return result;
+}
+
+// Scalar - Vector Subtraction
+template <int N>
+inline Vector<N> operator - (const float a, const Vector<N>& v) {
+    auto itv = v.begin();
+    Vector<N> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](float &r){ r = a - *itv++; });
     return result;
 }
 
@@ -67,12 +117,27 @@ inline Vector<N> operator * (const Vector<N>& v, const float a) {
     return result;
 }
 
+// Scalar - Vector Multiplication (commutative)
+template <int N>
+inline Vector<N> operator * (const float a, const Vector<N>& v) {
+    return v * a;
+}
+
 // Vector - Scalar Division
 template <int N>
 inline Vector<N> operator / (const Vector<N>& v, const float a) {
     auto itv = v.begin();
     Vector<N> result;
     std::for_each(result.begin(), result.end(), [&a, &itv](float &r){ r = *itv++ / a; });
+    return result;
+}
+
+// Scalar - Vector Division
+template <int N>
+inline Vector<N> operator / (const float a, const Vector<N>& v) {
+    auto itv = v.begin();
+    Vector<N> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](float &r){ r = a / *itv++; });
     return result;
 }
 
@@ -95,6 +160,24 @@ struct Matrix : public std::array<Vector<M>, N> {
         std::copy((float *) il, (float *) il + (N * M), span().begin());
     }
 
+    Matrix(const std::vector<float>& v) {
+        assert(v.size() == N * M);
+        std::copy(v.begin(), v.end(), span().begin());
+    }
+
+    Matrix(std::initializer_list<float> list) {
+        assert(list.size() == N * M);
+        std::copy(list.begin(), list.end(), span().begin());
+    }
+
+    Matrix(std::initializer_list<std::array<float, M>> list) {
+        assert(list.size() == N);
+        int row = 0;
+        for (const auto& v : list) {
+            std::copy(v.begin(), v.end(), span(row++).begin());
+        }
+    }
+
     // Matrix Raw Data
     std::span<float> span() {
         return std::span(&(*this)[0][0], N * M);
@@ -111,6 +194,11 @@ struct Matrix : public std::array<Vector<M>, N> {
 
     const std::span<const float> span(int row) const {
         return std::span(&(*this)[row][0], M);
+    }
+
+    // Cast to a const float*
+    operator const float*() const {
+        return span().data();
     }
 };
 
@@ -324,7 +412,7 @@ inline Matrix<N, N> adjoint(const Matrix<N, N>& m) {
 // Matrix Adjoint - Special case for size 1x1
 template <>
 inline Matrix<1, 1> adjoint(const Matrix<1, 1>& m) {
-    return { { 1 } };
+    return { 1 };
 }
 
 // Inverse Matrix: inverse(m) = adj(m)/det(m)
@@ -349,7 +437,10 @@ inline Matrix<N, N> inverse(const Matrix<N, N>& m) {
 template <int N>
 std::ostream& operator<<(std::ostream& os, const Vector<N>& v) {
     for (int i = 0; i < N; i++) {
-        os << v[i] << ", ";
+        os << v[i];
+        if (i < N - 1) {
+            os << ", ";
+        }
     }
     return os;
 }
@@ -358,7 +449,10 @@ template <int N, int M>
 std::ostream& operator<<(std::ostream& os, const Matrix<N, M>& m) {
     for (int j = 0; j < N; j++) {
         for (int i = 0; i < M; i++) {
-            os << m[j][i] << ", ";
+            os << m[j][i];
+            if (j < N - 1 || i < M -1) {
+                os << ", ";
+            }
         }
         if (j < N-1) {
             os << std::endl;

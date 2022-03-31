@@ -58,10 +58,10 @@ int main(int argc, const char* argv[]) {
 
         gls::tiff_metadata metadata;
         const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &metadata);
-        metadata[TIFFTAG_COLORMATRIX1] = std::vector<float>{ 2.5251, -1.3908, -0.3936, -0.5996, 1.7697, -0.1700, 0.2232, -0.2430, 1.2527 };
-        metadata[TIFFTAG_ASSHOTNEUTRAL] = std::vector<float>{ 0.572128, 1.000000, 1.313796 };
+//        metadata[TIFFTAG_COLORMATRIX1] = std::vector<float>{ 2.5251, -1.3908, -0.3936, -0.5996, 1.7697, -0.1700, 0.2232, -0.2430, 1.2527 };
+//        metadata[TIFFTAG_ASSHOTNEUTRAL] = std::vector<float>{ 0.572128, 1.000000, 1.313796 };
 
-        inputImage->write_png_file((input_path.parent_path() / input_path.stem()).string() + ".png");
+        // inputImage->write_png_file((input_path.parent_path() / input_path.stem()).string() + ".png");
 
 //        gls::tiff_metadata metadata;
 //        IMX571Metadata(&metadata);

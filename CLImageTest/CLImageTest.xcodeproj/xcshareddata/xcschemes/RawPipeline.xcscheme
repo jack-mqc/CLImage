@@ -54,7 +54,7 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "/Users/fabio/work/DNGTests/6500k.mcbeth.dng"
+            argument = "/Users/fabio/work/DNGTests/L1010629.DNG"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

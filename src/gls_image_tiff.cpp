@@ -41,6 +41,15 @@ inline static uint16_t swapBytes(uint16_t in) {
     return ((in & 0xff) << 8) | (in >> 8);
 }
 
+int findGcd(int a, int b) {
+  while ((a % b) > 0) {
+    int R = a % b;
+    a = b;
+    b = R;
+  }
+  return b;
+}
+
 inline static void unpack12BitsInto16Bits(uint16_t *out, const uint16_t *in, size_t in_size) {
     for (int i = 0; i < in_size; i += 3) {
         uint16_t in0 = swapBytes(in[i]);
@@ -53,6 +62,55 @@ inline static void unpack12BitsInto16Bits(uint16_t *out, const uint16_t *in, siz
         *out++ = in2 & 0xfff;
     }
 }
+
+inline static void unpack14BitsInto16Bits(uint16_t *out, const uint16_t *in, size_t in_size) {
+    for (int i = 0; i < in_size; i += 7) {
+        uint16_t in0 = swapBytes(in[i]);
+        uint16_t in1 = swapBytes(in[i+1]);
+        uint16_t in2 = swapBytes(in[i+2]);
+        uint16_t in3 = swapBytes(in[i+3]);
+        uint16_t in4 = swapBytes(in[i+4]);
+        uint16_t in5 = swapBytes(in[i+5]);
+        uint16_t in6 = swapBytes(in[i+6]);
+
+        *out++ = in0 >> 2;
+        *out++ = ((in0 << 12) & 0x3fff) | (in1 >> 4);
+        *out++ = ((in1 << 10) & 0x3fff) | (in2 >> 6);
+        *out++ = ((in2 <<  8) & 0x3fff) | (in3 >> 8);
+        *out++ = ((in3 <<  6) & 0x3fff) | (in4 >> 10);
+        *out++ = ((in4 <<  4) & 0x3fff) | (in5 >> 12);
+        *out++ = ((in5 <<  2) & 0x3fff) | (in6 >> 14);
+        *out++ = (in6 & 0x3fff);
+    }
+}
+
+// TODO: finish building a general unpacking function
+/*
+inline static void unpackTo16Bits(uint16_t *out, const uint16_t *in, int bitspersample, size_t in_size) {
+    int gcd = findGcd(16, bitspersample);
+
+    std::cout << "gcd: " << gcd << std::endl;
+
+    int inputWords = bitspersample / gcd;
+    int outputWords = 16 / gcd;
+
+    std::cout << "inputWords: " << inputWords << ", outputWords: " << outputWords << std::endl;
+
+    uint16_t inputBuffer[inputWords];
+    uint16_t outputBuffer[outputWords];
+
+    for (int i = 0; i < in_size; i += inputWords) {
+        for (int j = 0; j < inputWords; j++) {
+            inputBuffer[j] = swapBytes(in[i + j]);
+        }
+
+        int shift = 16 - bitspersample;
+        for (int k = 0; k < outputWords; k++) {
+
+        }
+    }
+}
+*/
 
 static void readTiffImageData(TIFF *tif, int width, int height, int tiff_bitspersample, int tiff_samplesperpixel,
                        std::function<void(int tiff_bitspersample, int tiff_samplesperpixel, int row, int strip_height,
@@ -82,6 +140,10 @@ static void readTiffImageData(TIFF *tif, int width, int height, int tiff_bitsper
 
             if (tiff_bitspersample == 12) {
                 unpack12BitsInto16Bits((uint16_t*) decodedBuffer.get(), (uint16_t*) tiffbuf.get(), stripSize / sizeof(uint16_t));
+
+                process_tiff_strip(/* tiff_bitspersample=*/ 16, tiff_samplesperpixel, row, nrow, decodedBuffer);
+            } else if (tiff_bitspersample == 14) {
+                unpack14BitsInto16Bits((uint16_t*) decodedBuffer.get(), (uint16_t*) tiffbuf.get(), stripSize / sizeof(uint16_t));
 
                 process_tiff_strip(/* tiff_bitspersample=*/ 16, tiff_samplesperpixel, row, nrow, decodedBuffer);
             } else if (tiff_bitspersample == 16) {

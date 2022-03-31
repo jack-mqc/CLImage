@@ -1,17 +1,37 @@
-//
-//  gls_color_science.cpp
-//  CLImageTest
-//
-//  Created by Fabio Riccardi on 3/28/22.
-//
+/*
+ *      Name:   XYZtoCorColorTemp.c
+ *
+ *      Author: Bruce Justin Lindbloom
+ *
+ *      Copyright (c) 2003 Bruce Justin Lindbloom. All rights reserved.
+ *
+ *      Input:  xyz = pointer to the input array of X, Y and Z color components (in that order).
+ *              temp = pointer to where the computed correlated color temperature should be placed.
+ *
+ *      Output: *temp = correlated color temperature, if successful.
+ *                    = unchanged if unsuccessful.
+ *
+ *      Return: 0 if successful, else -1.
+ *
+ *      Description:
+ *              This is an implementation of Robertson's method of computing the correlated color
+ *              temperature of an XYZ color. It can compute correlated color temperatures in the
+ *              range [1666.7K, infinity].
+ *
+ *      Reference:
+ *              "Color Science: Concepts and Methods, Quantitative Data and Formulae", Second Edition,
+ *              Gunter Wyszecki and W. S. Stiles, John Wiley & Sons, 1982, pp. 227, 228.
+ */
 
 #include "gls_color_science.hpp"
 
 #include <float.h>
 #include <math.h>
 
-/* LERP(a,b,c) = linear interpolation macro, is 'a' when c == 0.0 and 'b' when c == 1.0 */
-#define LERP(a,b,c)     (((b) - (a)) * (c) + (a))
+/* linear interpolation function, is 'a' when c == 0.0 and 'b' when c == 1.0 */
+inline float lerp(float a, float b, float c) {
+    return (b - a) * c + a;
+}
 
 typedef struct UVT {
     float  u;
@@ -62,26 +82,39 @@ UVT uvt[31] = {
     {0.33724, 0.36051, -116.45}
 };
 
+struct uv {
+    const float u;
+    const float v;
 
-float XYZtoCorColorTemp(const float xyz[3])
-{
+    uv(const float xyz[3]) :
+        u((4.0 * xyz[0]) / (xyz[0] + 15.0 * xyz[1] + 3.0 * xyz[2])),
+        v((6.0 * xyz[1]) / (xyz[0] + 15.0 * xyz[1] + 3.0 * xyz[2])) {
+    }
+};
+
+float XYZtoCorColorTemp(const float xyz[3]) {
     if ((xyz[0] < 1.0e-20) && (xyz[1] < 1.0e-20) && (xyz[2] < 1.0e-20))
         return(-1);     /* protect against possible divide-by-zero failure */
-    float us = (4.0 * xyz[0]) / (xyz[0] + 15.0 * xyz[1] + 3.0 * xyz[2]);
-    float vs = (6.0 * xyz[1]) / (xyz[0] + 15.0 * xyz[1] + 3.0 * xyz[2]);
+
+    uv sample(xyz);
+
     float di = 0.0, dm = 0.0;
-    int i = 0;
-    for (i = 0; i < 31; i++) {
-        di = (vs - uvt[i].v) - uvt[i].t * (us - uvt[i].u);
-        if ((i > 0) && (((di < 0.0) && (dm >= 0.0)) || ((di >= 0.0) && (dm < 0.0))))
-            break;  /* found lines bounding (us, vs) : i-1 and i */
+
+    int idx;
+    for (idx = 0; idx < 31; idx++) {
+        di = (sample.v - uvt[idx].v) - uvt[idx].t * (sample.u - uvt[idx].u);
+        if ((idx > 0) && (((di < 0.0) && (dm >= 0.0)) || ((di >= 0.0) && (dm < 0.0))))
+            break;  /* found lines bounding sample : i-1 and i */
         dm = di;
     }
-    if (i == 31)
-        return(-1);     /* bad XYZ input, color temp would be less than minimum of 1666.7 degrees, or too far towards blue */
-    di = di / sqrt(1.0 + uvt[i    ].t * uvt[i    ].t);
-    dm = dm / sqrt(1.0 + uvt[i - 1].t * uvt[i - 1].t);
+
+    if (idx == 31)
+        return -1;     /* bad XYZ input, color temp would be less than minimum of 1666.7 degrees, or too far towards blue */
+
+    di = di / sqrt(1.0 + uvt[idx    ].t * uvt[idx    ].t);
+    dm = dm / sqrt(1.0 + uvt[idx - 1].t * uvt[idx - 1].t);
     float p = dm / (dm - di);     /* p = interpolation parameter, 0.0 : i-1, 1.0 : i */
-    p = 1.0 / (LERP(rt[i - 1], rt[i], p));
+    p = 1.0 / (lerp(rt[idx - 1], rt[idx], p));
+
     return p;
 }

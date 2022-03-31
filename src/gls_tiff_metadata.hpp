@@ -40,6 +40,15 @@ void augment_libtiff_with_custom_tags();
 
 void setMetadata(TIFF* tif, tiff_metadata* metadata, ttag_t key);
 
+template <typename T>
+std::vector<T> getVector(const gls::tiff_metadata& metadata, ttag_t key) {
+    const auto& entry = metadata.find(key);
+    if (entry != metadata.end()) {
+        return std::get<std::vector<T>>(metadata.find(key)->second);
+    }
+    return std::vector<T>();
+}
+
 // DNG Extension Tags
 
 #define TIFFTAG_DNG_IMAGEWIDTH 61441
