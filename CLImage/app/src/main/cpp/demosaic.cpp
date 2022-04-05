@@ -98,54 +98,52 @@ void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage,
         int color = (y & 1) == (r.y & 1) ? red : blue;
         int x0 = (y & 1) == (g.y & 1) ? g.x + 1 : g.x;
 
-        int hl = (*rgbImage)[y][x0 - 1][green];
-        int cxy = (*rgbImage)[y][x0][color];
-        int chl = (*rgbImage)[y][x0 - 2][color];
+        int g_left  = (*rgbImage)[y][x0 - 1][green];
+        int c_xy    = (*rgbImage)[y][x0][color];
+        int c_left  = (*rgbImage)[y][x0 - 2][color];
 
-        for (int x = 2; x < width - 2; x++) {
-            if ((x & 1) == (x0 & 1)) {
-                int hr = (*rgbImage)[y][x + 1][green];
-                int vu = (*rgbImage)[y - 1][x][green];
-                int vd = (*rgbImage)[y + 1][x][green];
-                int dh = abs(hl - hr);
-                int dv = abs(vu - vd);
+        for (int x = x0 + 2; x < width - 2; x += 2) {
+            int g_right = (*rgbImage)[y][x + 1][green];
+            int g_up    = (*rgbImage)[y - 1][x][green];
+            int g_down  = (*rgbImage)[y + 1][x][green];
+            int g_dh    = abs(g_left - g_right);
+            int g_dv    = abs(g_up - g_down);
 
-                int chr = (*rgbImage)[y][x + 2][color];
-                int cvu = (*rgbImage)[y - 2][x][color];
-                int cvd = (*rgbImage)[y + 2][x][color];
-                int cdh = abs(chl + chr - 2 * cxy);
-                int cdv = abs(cvu + cvd - 2 * cxy);
+            int c_right = (*rgbImage)[y][x + 2][color];
+            int c_up    = (*rgbImage)[y - 2][x][color];
+            int c_down  = (*rgbImage)[y + 2][x][color];
+            int c_dh    = abs(c_left + c_right - 2 * c_xy);
+            int c_dv    = abs(c_up + c_down - 2 * c_xy);
 
-                // we're doing edge directed bilinear interpolation on the green channel,
-                // which is a low pass operation (averaging), so we add some signal from the
-                // high frequencies of the observed color channel
+            // Minimum derivative value for edge directed interpolation (avoid aliasing)
+            int dThreshold = 1200;
 
-                // Minimum derivative value for edge directed interpolation (avoid aliasing)
-                int dThreshold = 1200;
+            // we're doing edge directed bilinear interpolation on the green channel,
+            // which is a low pass operation (averaging), so we add some signal from the
+            // high frequencies of the observed color channel
 
-                int sample;
-                if (dv + cdv > dThreshold && dv + cdv > (dh + cdh)) {
-                    sample = (hl + hr) / 2;
-                    if (sample < 4 * cxy && cxy < 4 * sample) {
-                        sample += (cxy - (chl + chr) / 2) / 4;
-                    }
-                } else if (dh + cdh > dThreshold && dh + cdh > (dv + cdv)) {
-                    sample = (vu + vd) / 2;
-                    if (sample < 4 * cxy && cxy < 4 * sample) {
-                        sample += (cxy - (cvu + cvd) / 2) / 4;
-                    }
-                } else {
-                    sample = (vu + hl + vd + hr) / 4;
-                    if (sample < 4 * cxy && cxy < 4 * sample) {
-                        sample += (cxy - (chl + chr + cvu + cvd) / 4) / 8;
-                    }
+            int sample;
+            if (g_dv + c_dv > dThreshold && g_dv + c_dv > g_dh + c_dh) {
+                sample = (g_left + g_right) / 2;
+                if (sample < 4 * c_xy && c_xy < 4 * sample) {
+                    sample += (c_xy - (c_left + c_right) / 2) / 4;
                 }
-
-                (*rgbImage)[y][x][green] = clamp(sample);
-                hl = hr;
-                chl = cxy;
-                cxy = chr;
+            } else if (g_dh + c_dh > dThreshold && g_dh + c_dh > g_dv + c_dv) {
+                sample = (g_up + g_down) / 2;
+                if (sample < 4 * c_xy && c_xy < 4 * sample) {
+                    sample += (c_xy - (c_up + c_down) / 2) / 4;
+                }
+            } else {
+                sample = (g_up + g_left + g_down + g_right) / 4;
+                if (sample < 4 * c_xy && c_xy < 4 * sample) {
+                    sample += (c_xy - (c_left + c_right + c_up + c_down) / 4) / 8;
+                }
             }
+
+            (*rgbImage)[y][x][green] = clamp(sample);
+            g_left = g_right;
+            c_left = c_xy;
+            c_xy   = c_right;
         }
     }
 
@@ -156,41 +154,41 @@ void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage,
         int channel = (y & 1) == (r.y & 1) ? red : blue;
         int x0 = 2 + ((y & 1) == (g.y & 1) ? g.x + 1 : g.x);
 
-        int xy = (*rgbImage)[y][x0][green];
-        int hl = (*rgbImage)[y][x0 - 2][green];
-        int ul = (*rgbImage)[y - 2][x0 - 2][green];
-        int bl = (*rgbImage)[y + 2][x0 - 2][green];
+        int g_xy            = (*rgbImage)[y][x0][green];
+        int g_left          = (*rgbImage)[y][x0 - 2][green];
+        int g_top_left      = (*rgbImage)[y - 2][x0 - 2][green];
+        int g_bottom_left   = (*rgbImage)[y + 2][x0 - 2][green];
 
-        int cxy = (*rgbImage)[y][x0][channel];
-        int chl = (*rgbImage)[y][x0 - 2][channel];
-        int cul = (*rgbImage)[y - 2][x0 - 2][channel];
-        int cbl = (*rgbImage)[y + 2][x0 - 2][channel];
+        int c_xy            = (*rgbImage)[y][x0][channel];
+        int c_left          = (*rgbImage)[y][x0 - 2][channel];
+        int c_top_left      = (*rgbImage)[y - 2][x0 - 2][channel];
+        int c_bottom_left   = (*rgbImage)[y + 2][x0 - 2][channel];
 
         for (int x = 2; x < width - 2; x += 2) {
-            int hr = (*rgbImage)[y][x + 2][green];
-            int ur = (*rgbImage)[y - 2][x + 2][green];
-            int br = (*rgbImage)[y + 2][x + 2][green];
-            int vu = (*rgbImage)[y - 2][x][green];
-            int vd = (*rgbImage)[y + 2][x][green];
+            int g_right         = (*rgbImage)[y][x + 2][green];
+            int g_top_right     = (*rgbImage)[y - 2][x + 2][green];
+            int g_bottom_right  = (*rgbImage)[y + 2][x + 2][green];
+            int g_up            = (*rgbImage)[y - 2][x][green];
+            int g_down          = (*rgbImage)[y + 2][x][green];
 
-            int chr = (*rgbImage)[y][x + 2][channel];
-            int cur = (*rgbImage)[y - 2][x + 2][channel];
-            int cbr = (*rgbImage)[y + 2][x + 2][channel];
-            int cvu = (*rgbImage)[y - 2][x][channel];
-            int cvd = (*rgbImage)[y + 2][x][channel];
+            int c_right         = (*rgbImage)[y][x + 2][channel];
+            int c_top_right     = (*rgbImage)[y - 2][x + 2][channel];
+            int c_bottom_right  = (*rgbImage)[y + 2][x + 2][channel];
+            int c_up            = (*rgbImage)[y - 2][x][channel];
+            int c_down          = (*rgbImage)[y + 2][x][channel];
 
             // Only work on the pixels that have a strong enough correlation between channels
 
-            if (xy < 4 * cxy && cxy < 4 * xy) {
-                int dh = xy - (hl + hr) / 2;
-                int dv = xy - (vu + vd) / 2;
-                int ne = xy - (ul + br) / 2;
-                int nw = xy - (ur + bl) / 2;
+            if (g_xy < 4 * c_xy && c_xy < 4 * g_xy) {
+                int dh = g_xy - (g_left + g_right) / 2;
+                int dv = g_xy - (g_up + g_down) / 2;
+                int ne = g_xy - (g_top_left + g_bottom_right) / 2;
+                int nw = g_xy - (g_top_right + g_bottom_left) / 2;
 
-                int cdh = cxy - (chl + chr) / 2;
-                int cdv = cxy - (cvu + cvd) / 2;
-                int cne = cxy - (cul + cbr) / 2;
-                int cnw = cxy - (cur + cbl) / 2;
+                int cdh = c_xy - (c_left + c_right) / 2;
+                int cdv = c_xy - (c_up + c_down) / 2;
+                int cne = c_xy - (c_top_left + c_bottom_right) / 2;
+                int cnw = c_xy - (c_top_right + c_bottom_left) / 2;
 
                 enum GradientDirection {
                     horizontal = 0,
@@ -218,20 +216,20 @@ void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage,
 
                 // Only work on parts of the image that have enough "detail"
 
-                if (minimumDirection != none && minimumGradient > xy / 4) {
+                if (minimumDirection != none && minimumGradient > g_xy / 4) {
                     int sample;
                     switch (minimumDirection) {
                         case horizontal:
-                            sample = (xy + (hl + hr) / 2 + cdh) / 2;
+                            sample = (g_xy + (g_left + g_right) / 2 + cdh) / 2;
                             break;
                         case vertical:
-                            sample = (xy + (vu + vd) / 2 + cdv) / 2;
+                            sample = (g_xy + (g_up + g_down) / 2 + cdv) / 2;
                             break;
                         case northEast:
-                            sample = (xy + (ul + br) / 2 + cne) / 2;
+                            sample = (g_xy + (g_top_left + g_bottom_right) / 2 + cne) / 2;
                             break;
                         case northWest:
-                            sample = (xy + (ur + bl) / 2 + cnw) / 2;
+                            sample = (g_xy + (g_top_right + g_bottom_left) / 2 + cnw) / 2;
                             break;
                         case none:
                             // never happens, just make the compiler happy
@@ -243,18 +241,18 @@ void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage,
                 }
             }
 
-            hl = xy;
-            xy = hr;
-            ul = vu;
-            vu = ur;
-            bl = vd;
-            vd = br;
-            chl = cxy;
-            cxy = chr;
-            cul = cvu;
-            cvu = cur;
-            cbl = cvd;
-            cvd = cbr;
+            g_left          = g_xy;
+            g_xy            = g_right;
+            g_top_left      = g_up;
+            g_up            = g_top_right;
+            g_bottom_left   = g_down;
+            g_down          = g_bottom_right;
+            c_left          = c_xy;
+            c_xy            = c_right;
+            c_top_left      = c_up;
+            c_up            = c_top_right;
+            c_bottom_left   = c_down;
+            c_down          = c_bottom_right;
         }
     }
 }
@@ -267,9 +265,8 @@ void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayer
 
     for (int y = 1; y < height - 1; y++) {
         for (int x = 1; x < width - 1; x++) {
-            for (int i = 0; i < 2; i++) {
-                const int channel = i == 0 ? red : blue;
-                const gls::point c = offsets[channel];
+            for (int color : {red, blue}) {
+                const gls::point c = offsets[color];
 
                 if (((x + c.x) & 1) != (c.x & 1) || ((y + c.y) & 1) != (c.y & 1)) {
                     int sample;
@@ -277,38 +274,38 @@ void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayer
 
                     if (((x + c.x) & 1) != (c.x & 1) && ((y + c.y) & 1) != (c.y & 1)) {
                         // Pixel at color location
-                        int gne = (*image)[y + c.y + 1][x + c.x - 1][green];
-                        int gnw = (*image)[y + c.y + 1][x + c.x + 1][green];
-                        int gsw = (*image)[y + c.y - 1][x + c.x + 1][green];
-                        int gse = (*image)[y + c.y - 1][x + c.x - 1][green];
+                        int g_ne = (*image)[y + c.y + 1][x + c.x - 1][green];
+                        int g_nw = (*image)[y + c.y + 1][x + c.x + 1][green];
+                        int g_sw = (*image)[y + c.y - 1][x + c.x + 1][green];
+                        int g_se = (*image)[y + c.y - 1][x + c.x - 1][green];
 
-                        int cne = gne - (*image)[y + c.y + 1][x + c.x - 1][channel];
-                        int cnw = gnw - (*image)[y + c.y + 1][x + c.x + 1][channel];
-                        int csw = gsw - (*image)[y + c.y - 1][x + c.x + 1][channel];
-                        int cse = gse - (*image)[y + c.y - 1][x + c.x - 1][channel];
+                        int c_ne = g_ne - (*image)[y + c.y + 1][x + c.x - 1][color];
+                        int c_nw = g_nw - (*image)[y + c.y + 1][x + c.x + 1][color];
+                        int c_sw = g_sw - (*image)[y + c.y - 1][x + c.x + 1][color];
+                        int c_se = g_se - (*image)[y + c.y - 1][x + c.x - 1][color];
 
-                        sample = cg - (cne + csw + cnw + cse) / 4;
+                        sample = cg - (c_ne + c_sw + c_nw + c_se) / 4;
                     } else if (((x + c.x) & 1) == (c.x & 1) && ((y + c.y) & 1) != (c.y & 1)) {
                         // Pixel at green location - vertical
-                        int gu = (*image)[y + c.y - 1][x + c.x][green];
-                        int gd = (*image)[y + c.y + 1][x + c.x][green];
+                        int g_up    = (*image)[y + c.y - 1][x + c.x][green];
+                        int g_down  = (*image)[y + c.y + 1][x + c.x][green];
 
-                        int cu = gu - (*image)[y + c.y - 1][x + c.x][channel];
-                        int cd = gd - (*image)[y + c.y + 1][x + c.x][channel];
+                        int c_up    = g_up - (*image)[y + c.y - 1][x + c.x][color];
+                        int c_down  = g_down - (*image)[y + c.y + 1][x + c.x][color];
 
-                        sample = cg - (cu + cd) / 2;
+                        sample = cg - (c_up + c_down) / 2;
                     } else {
                         // Pixel at green location - horizontal
-                        int gl = (*image)[y + c.y][x + c.x - 1][green];
-                        int gr = (*image)[y + c.y][x + c.x + 1][green];
+                        int g_left  = (*image)[y + c.y][x + c.x - 1][green];
+                        int g_right = (*image)[y + c.y][x + c.x + 1][green];
 
-                        int cl = gl - (*image)[y + c.y][x + c.x - 1][channel];
-                        int cr = gr - (*image)[y + c.y][x + c.x + 1][channel];
+                        int c_left  = g_left - (*image)[y + c.y][x + c.x - 1][color];
+                        int c_right = g_right - (*image)[y + c.y][x + c.x + 1][color];
 
-                        sample = cg - (cl + cr) / 2;
+                        sample = cg - (c_left + c_right) / 2;
                     }
 
-                    (*image)[y + c.y][x + c.x][channel] = clamp(sample);
+                    (*image)[y + c.y][x + c.x][color] = clamp(sample);
                 }
             }
         }
