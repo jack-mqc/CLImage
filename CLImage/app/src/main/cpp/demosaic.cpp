@@ -120,17 +120,25 @@ void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage,
                 // which is a low pass operation (averaging), so we add some signal from the
                 // high frequencies of the observed color channel
 
+                // Minimum derivative value for edge directed interpolation (avoid aliasing)
+                int dThreshold = 1200;
+
                 int sample;
-                if (dv + cdv - (dh + cdh) > 0) {
+                if (dv + cdv > dThreshold && dv + cdv > (dh + cdh)) {
                     sample = (hl + hr) / 2;
-                    if (sample < 4 * cxy && cxy < 4 * sample) sample += (cxy - (chl + chr) / 2) / 4;
-                } else if (dh + cdh - (dv + cdv) > 0) {
+                    if (sample < 4 * cxy && cxy < 4 * sample) {
+                        sample += (cxy - (chl + chr) / 2) / 4;
+                    }
+                } else if (dh + cdh > dThreshold && dh + cdh > (dv + cdv)) {
                     sample = (vu + vd) / 2;
-                    if (sample < 4 * cxy && cxy < 4 * sample) sample += (cxy - (cvu + cvd) / 2) / 4;
+                    if (sample < 4 * cxy && cxy < 4 * sample) {
+                        sample += (cxy - (cvu + cvd) / 2) / 4;
+                    }
                 } else {
                     sample = (vu + hl + vd + hr) / 4;
-                    if (sample < 4 * cxy && cxy < 4 * sample)
+                    if (sample < 4 * cxy && cxy < 4 * sample) {
                         sample += (cxy - (chl + chr + cvu + cvd) / 4) / 8;
+                    }
                 }
 
                 (*rgbImage)[y][x][green] = clamp(sample);
@@ -331,19 +339,23 @@ gls::Matrix<3, 3> cam_xyz_coeff(gls::Vector<3>& pre_mul, const gls::Matrix<3, 3>
     // color spaces, so that clipping doesn't turn pink
 
     auto cam_white = rgb_cam * gls::Vector<3>({ 1, 1, 1 });
+
+    gls::Matrix<3, 3> mPreMul = {
+        { 1 / cam_white[0], 0, 0 },
+        { 0, 1 / cam_white[1], 0 },
+        { 0, 0, 1 / cam_white[2] }
+    };
+
     for (int i = 0; i < 3; i++) {
         if (cam_white[i] > 0.00001) {
-            rgb_cam[i] = rgb_cam[i] / cam_white[i];
             pre_mul[i] = 1 / cam_white[i];
         } else {
-            // TODO: Should this just be an error?
-            rgb_cam[i] = gls::Vector<3>({ 0, 0, 0 });
-            pre_mul[i] = 1;
+            throw std::range_error("");
         }
     }
 
     // Return Camera -> sRGB
-    return inverse(rgb_cam);
+    return inverse(mPreMul * rgb_cam);
 }
 
 gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
@@ -385,24 +397,32 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     // Save the whitening transformation
     const auto inv_cam_white = pre_mul;
 
+    gls::Matrix<3, 3> mCamMul = {
+        { pre_mul[0] / cam_mul[0], 0, 0 },
+        { 0, pre_mul[1] / cam_mul[1], 0 },
+        { 0, 0, pre_mul[2] / cam_mul[2] }
+    };
+
     // If cam_mul is available use that instead of pre_mul
     for (int i = 0; i < 3; i++) {
-        pre_mul[i] = cam_mul[i]; // / pre_mul[i];
+        pre_mul[i] = cam_mul[i];
     }
 
     {
-//        const gls::Vector<3> d65_white = { 0.95047, 1.0, 1.08883 };
-//        const gls::Vector<3> d50_white = { 0.9642, 1.0000, 0.8249 };
-//
-//        std::cout << "XYZ D65 White -> sRGB: " << rgb_xyz * d65_white << std::endl;
-//        std::cout << "sRGB White -> XYZ D65: " << xyz_rgb * gls::Vector({1, 1, 1}) << std::endl;
-//        std::cout << "inverse(cam_xyz) * (1 / pre_mul): " << inverse(cam_xyz) * (1 / pre_mul) << std::endl;
-//
-//        auto cam_white = cam_xyz * xyz_rgb * gls::Vector<3>({ 1, 1, 1 });
-//        std::cout << "inverse(cam_xyz) * cam_white: " << inverse(cam_xyz) * cam_white << ", CCT: " << XYZtoCorColorTemp(inverse(cam_xyz) * cam_white) << std::endl;
-//        std::cout << "xyz_rgb * gls::Vector<3>({ 1, 1, 1 }): " << xyz_rgb * gls::Vector<3>({ 1, 1, 1 }) << ", CCT: " << XYZtoCorColorTemp(xyz_rgb * gls::Vector<3>({ 1, 1, 1 })) << std::endl;
+        const gls::Vector<3> d65_white = { 0.95047, 1.0, 1.08883 };
+        const gls::Vector<3> d50_white = { 0.9642, 1.0000, 0.8249 };
 
-        const auto wb_out = xyz_rgb * rgb_cam * (1 / cam_mul);
+        std::cout << "XYZ D65 White -> sRGB: " << rgb_xyz * d65_white << std::endl;
+        std::cout << "sRGB White -> XYZ D65: " << xyz_rgb * gls::Vector({1, 1, 1}) << std::endl;
+        std::cout << "inverse(cam_xyz) * (1 / pre_mul): " << inverse(cam_xyz) * (1 / pre_mul) << std::endl;
+
+        auto cam_white = cam_xyz * xyz_rgb * gls::Vector<3>({ 1, 1, 1 });
+        std::cout << "inverse(cam_xyz) * cam_white: " << inverse(cam_xyz) * cam_white << ", CCT: " << XYZtoCorColorTemp(inverse(cam_xyz) * cam_white) << std::endl;
+        std::cout << "xyz_rgb * gls::Vector<3>({ 1, 1, 1 }): " << xyz_rgb * gls::Vector<3>({ 1, 1, 1 }) << ", CCT: " << XYZtoCorColorTemp(xyz_rgb * gls::Vector<3>({ 1, 1, 1 })) << std::endl;
+
+        std::cout << "***>> pizza: " << XYZtoCorColorTemp(xyz_rgb * rgb_cam * ((1 / pre_mul) * gls::Vector<3>({ 1, 1, 1 }))) << std::endl;
+
+        const auto wb_out = xyz_rgb * rgb_cam * mCamMul * gls::Vector({1, 1, 1});
         std::cout << "wb_out: " << wb_out << ", CCT: " << XYZtoCorColorTemp(wb_out) << std::endl;
 
         const auto no_wb_out = xyz_rgb * rgb_cam * (1 / inv_cam_white);
@@ -413,8 +433,9 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     auto minmax = std::minmax_element(std::begin(pre_mul), std::end(pre_mul));
     gls::Vector<4> scale_mul;
     for (int c = 0; c < 4; c++) {
-        printf("pre_mul[c]: %f, *minmax.second: %f, white_level: %d\n", pre_mul[c], *minmax.second, white_level);
-        scale_mul[c] = (pre_mul[c == 3 ? 1 : c] / *minmax.first) * 65535.0 / (white_level - black_level);
+        int pre_mul_idx = c == 3 ? 1 : c;
+        printf("pre_mul[c]: %f, *minmax.second: %f, white_level: %d\n", pre_mul[pre_mul_idx], *minmax.second, white_level);
+        scale_mul[c] = (pre_mul[pre_mul_idx] / *minmax.first) * 65535.0 / (white_level - black_level);
     }
     printf("scale_mul: %f, %f, %f, %f\n", scale_mul[0], scale_mul[1], scale_mul[2], scale_mul[3]);
 
@@ -443,7 +464,7 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     for (int y = 0; y < rgbImage->height; y++) {
         for (int x = 0; x < rgbImage->width; x++) {
             auto& p = (*rgbImage)[y][x];
-            const auto op = rgb_cam * (/* (cam_mul / pre_mul) * */ gls::Vector<3>({ (float) p[0], (float) p[1], (float) p[2] }));
+            const auto op = rgb_cam * /* mCamMul * */ gls::Vector<3>({ (float) p[0], (float) p[1], (float) p[2] });
             p = { clamp(op[0]), clamp(op[1]), clamp(op[2]) };
         }
     }
