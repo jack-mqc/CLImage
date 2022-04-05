@@ -184,7 +184,7 @@ void getAllTIFFTags(TIFF* tif, tiff_metadata* metadata) {
 
 void getExifMetaData(TIFF* tif, tiff_metadata* metadata) {
     if (tif) {
-        uint32_t exif_offset;
+        toff_t exif_offset;
         if (TIFFGetField(tif, TIFFTAG_EXIFIFD, &exif_offset)) {
             TIFFReadEXIFDirectory(tif, exif_offset);
 
