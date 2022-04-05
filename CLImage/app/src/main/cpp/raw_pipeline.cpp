@@ -102,7 +102,7 @@ int main(int argc, const char* argv[]) {
         rgb_image->write_tiff_file(input_path.replace_extension("_rgb.tiff").c_str());
 
         auto output_image = applyToneCurve(*rgb_image);
-        output_image->write_jpeg_file(input_path.replace_extension(".jpg"), 95);
+        output_image->write_png_file(input_path.replace_extension(".png"));
 
 //        LOG_INFO(TAG) << "done with inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
 //

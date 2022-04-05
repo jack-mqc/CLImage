@@ -284,7 +284,18 @@ void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayer
                         int c_sw = g_sw - (*image)[y + c.y - 1][x + c.x + 1][color];
                         int c_se = g_se - (*image)[y + c.y - 1][x + c.x - 1][color];
 
-                        sample = cg - (c_ne + c_sw + c_nw + c_se) / 4;
+                        int d_ne_sw = abs(c_ne - c_sw);
+                        int d_nw_se = abs(c_nw - c_se);
+
+                        // Minimum gradient for edge directed interpolation
+                        int dThreshold = 800;
+                        if (d_ne_sw > dThreshold && d_ne_sw > d_nw_se) {
+                            sample = cg - (c_nw + c_se) / 2;
+                        } else if (d_nw_se > dThreshold && d_nw_se > d_ne_sw) {
+                            sample = cg - (c_ne + c_sw) / 2;
+                        } else {
+                            sample = cg - (c_ne + c_sw + c_nw + c_se) / 4;
+                        }
                     } else if (((x + c.x) & 1) == (c.x & 1) && ((y + c.y) & 1) != (c.y & 1)) {
                         // Pixel at green location - vertical
                         int g_up    = (*image)[y + c.y - 1][x + c.x][green];
