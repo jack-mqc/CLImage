@@ -28,6 +28,8 @@ static const char* TAG = "RawPipeline Test";
 
 inline uint16_t clamp(int x) { return x < 0 ? 0 : x > 0xffff ? 0xffff : x; }
 
+inline uint8_t clamp8(int x) { return x < 0 ? 0 : x > 0xff ? 0xff : x; }
+
 // IMX492 M43-ish Sony Sensor
 void IMX492Metadata(gls::tiff_metadata *metadata) {
     metadata->insert({ TIFFTAG_COLORMATRIX1, std::vector<float>{ 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553 } });
@@ -48,6 +50,31 @@ void IMX571Metadata(gls::tiff_metadata *metadata) {
     metadata->insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0xffff } });
 }
 
+static float sigmoid(float x, float b) {
+    return tanh(x - b) - tanh(-b);
+}
+
+static float toneCurve(float p) {
+    float b = 1.0f;
+    return sigmoid(2 * sqrt(p), b) / (sigmoid(1.0f, b) - sigmoid(0.0f, b));
+}
+
+static gls::image<gls::rgb_pixel>::unique_ptr applyToneCurve(const gls::image<gls::rgb_pixel_16>& image) {
+    auto output_image = std::make_unique<gls::image<gls::rgb_pixel>>(image.width, image.height);
+
+    for (int y = 0; y < image.height; y++) {
+        for (int x = 0; x < image.width; x++) {
+            const gls::rgb_pixel_16 &p = image[y][x];
+            (*output_image)[y][x] = {
+                clamp8(0xff * toneCurve(p[0] / (float) 0xffff)),
+                clamp8(0xff * toneCurve(p[1] / (float) 0xffff)),
+                clamp8(0xff * toneCurve(p[2] / (float) 0xffff))
+            };
+        }
+    }
+    return output_image;
+}
+
 int main(int argc, const char* argv[]) {
     printf("RawPipeline Test!\n");
 
@@ -58,13 +85,14 @@ int main(int argc, const char* argv[]) {
 
         gls::tiff_metadata metadata;
         const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &metadata);
-//        metadata[TIFFTAG_COLORMATRIX1] = std::vector<float>{ 2.5251, -1.3908, -0.3936, -0.5996, 1.7697, -0.1700, 0.2232, -0.2430, 1.2527 };
-//        metadata[TIFFTAG_ASSHOTNEUTRAL] = std::vector<float>{ 0.572128, 1.000000, 1.313796 };
 
-        // inputImage->write_png_file((input_path.parent_path() / input_path.stem()).string() + ".png");
+//        metadata[TIFFTAG_COLORMATRIX1] = std::vector<float>{ 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553 };
+//        metadata[TIFFTAG_ASSHOTNEUTRAL] = std::vector<float>{ 0.7380, 1, 0.5207 };
+
+        inputImage->write_png_file((input_path.parent_path() / input_path.stem()).string() + ".png");
 
 //        gls::tiff_metadata metadata;
-//        IMX571Metadata(&metadata);
+//        IMX492Metadata(&metadata);
 //        const auto inputImage = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
 
         LOG_INFO(TAG) << "read inputImage of size: " << inputImage->width << " x " << inputImage->height << std::endl;
@@ -73,10 +101,13 @@ int main(int argc, const char* argv[]) {
 
         rgb_image->write_tiff_file(input_path.replace_extension("_rgb.tiff").c_str());
 
-        LOG_INFO(TAG) << "done with inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
+        auto output_image = applyToneCurve(*rgb_image);
+        output_image->write_jpeg_file(input_path.replace_extension(".jpg"), 95);
 
-        auto output_file = input_path.replace_extension("_my.dng").c_str();
-
-        inputImage->write_dng_file(output_file, /*compression=*/ gls::JPEG, &metadata);
+//        LOG_INFO(TAG) << "done with inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
+//
+//        auto output_file = input_path.replace_extension("_my.dng").c_str();
+//
+//        inputImage->write_dng_file(output_file, /*compression=*/ gls::JPEG, &metadata);
     }
 }

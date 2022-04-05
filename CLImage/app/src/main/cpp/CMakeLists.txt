@@ -77,6 +77,7 @@ add_executable(
         CLImageTest
         climage/gls_image_png.cpp
         climage/gls_image_jpeg.cpp
+        climage/gls_image_tiff.cpp
         climage/gls_icd_wrapper.cpp
         climage/gls_cl_error.cpp
         climage/gls_logging.cpp
@@ -98,6 +99,39 @@ target_compile_options( CLImageTest PRIVATE -Wall -Werror -DUSE_IOSTREAM_LOG )
 
 target_include_directories( CLImageTest PRIVATE ${CMAKE_SOURCE_DIR}/headers )
 target_include_directories( CLImageTest PRIVATE ${CMAKE_SOURCE_DIR}/climage )
+
+add_executable(
+        RawPipeline
+        climage/gls_image_png.cpp
+        climage/gls_image_jpeg.cpp
+        climage/gls_image_tiff.cpp
+        climage/gls_tiff_metadata.cpp
+        climage/gls_dng_lossless_jpeg.cpp
+        climage/gls_icd_wrapper.cpp
+        climage/gls_cl_error.cpp
+        climage/gls_logging.cpp
+        climage/gls_cl.cpp
+        climage/gls_color_science.cpp
+        cl_pipeline.cpp
+        demosaic.cpp
+        raw_pipeline.cpp
+        filesystem/operations.cpp
+        filesystem/directory_iterator.cpp
+)
+
+target_link_libraries( # Specifies the target library.
+        RawPipeline
+        libjpg
+        libpng
+        libz
+        libtiff
+        libtiffxx
+        ${log-lib})
+
+target_compile_options( RawPipeline PRIVATE -Wall -Werror -DUSE_IOSTREAM_LOG )
+
+target_include_directories( RawPipeline PRIVATE ${CMAKE_SOURCE_DIR}/headers )
+target_include_directories( RawPipeline PRIVATE ${CMAKE_SOURCE_DIR}/climage )
 
 add_executable(
         ShaderCompiler

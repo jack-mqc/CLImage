@@ -306,9 +306,6 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
 
         uint16_t tiff_bitspersample = 0;
         TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &tiff_bitspersample);
-//        if ((tiff_bitspersample != 8 && tiff_bitspersample != 12 && tiff_bitspersample != 16)) {
-//            throw std::runtime_error("can not read sample with " + std::to_string(tiff_bitspersample) + " bits depth");
-//        }
         printf("tiff_bitspersample: %d\n", tiff_bitspersample);
 
         uint16_t compression = 0;
@@ -421,12 +418,11 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
                 }
             }
         }
-
         if (metadata) {
             getExifMetaData(tif, metadata);
         }
     } else {
-        throw std::runtime_error("Couldn't read tiff file.");
+        throw std::runtime_error("Couldn't read dng file.");
     }
 }
 

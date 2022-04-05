@@ -325,7 +325,7 @@ class image : public basic_image<T> {
     // Image factory from TIFF file
     static unique_ptr read_tiff_file(const std::string& filename, tiff_metadata* metadata = nullptr) {
         unique_ptr image = nullptr;
-        gls::read_tiff_file(filename, T::channels, T::bit_depth,
+        gls::read_tiff_file(filename, T::channels, T::bit_depth, metadata,
                             [&image](int width, int height) -> bool {
                                 return (image = std::make_unique<gls::image<T>>(width, height)) != nullptr;
                             },

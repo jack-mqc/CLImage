@@ -553,7 +553,7 @@ typedef	struct {
         unsigned short field_bit;	/* bit in fieldsset bit vector */
 	unsigned char field_oktochange;	/* if true, can change while writing */
 	unsigned char field_passcount;	/* if true, pass dir count on set */
-	char	*field_name;		/* ASCII name */
+	const char	*field_name;		/* ASCII name */
 } TIFFFieldInfo;
 
 extern int TIFFMergeFieldInfo(TIFF*, const TIFFFieldInfo[], uint32_t);
