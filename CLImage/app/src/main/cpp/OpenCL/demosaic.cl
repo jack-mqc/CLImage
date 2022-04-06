@@ -31,6 +31,17 @@ constant const int2 bayerOffsets[4][4] = {
     { {1, 1}, {1, 0}, {0, 0}, {0, 1} }  // bggr
 };
 
+// Work on one Quad (2x2) at a time
+kernel void scaleRawData(read_only image2d_t rawImage, write_only image2d_t scaledRawImage,
+                         int bayerPattern, constant float scaleMul[4], float blackLevel) {
+    const int2 imageCoordinates = (int2) (2 * get_global_id(0), 2 * get_global_id(1));
+    for (int c = 0; c < 4; c++) {
+        int2 o = bayerOffsets[bayerPattern][c];
+        write_imagef(scaledRawImage, imageCoordinates + (int2) (o.x, o.y),
+                     clamp(scaleMul[c] * (read_imagef(rawImage, imageCoordinates + (int2) (o.x, o.y)).x - blackLevel), 0.0f, 1.0f));
+    }
+}
+
 kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t greenImage, int bayerPattern) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
@@ -41,19 +52,19 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
     int x0 = (y & 1) == (g.y & 1) ? g.x + 1 : g.x;
 
     if ((x0 & 1) == (x & 1)) {
-        float g_left  = read_imagef(rawImage,  (int2)(x - 1, y)).x;
-        float g_right = read_imagef(rawImage,  (int2)(x + 1, y)).x;
-        float g_up    = read_imagef(rawImage,  (int2)(x, y - 1)).x;
-        float g_down  = read_imagef(rawImage,  (int2)(x, y + 1)).x;
+        float g_left  = read_imagef(rawImage, (int2)(x - 1, y)).x;
+        float g_right = read_imagef(rawImage, (int2)(x + 1, y)).x;
+        float g_up    = read_imagef(rawImage, (int2)(x, y - 1)).x;
+        float g_down  = read_imagef(rawImage, (int2)(x, y + 1)).x;
         float g_dh    = fabs(g_left - g_right);
         float g_dv    = fabs(g_up - g_down);
 
-        float c_xy    = read_imagef(rawImage,  (int2)(x, y)).x;
+        float c_xy    = read_imagef(rawImage, (int2)(x, y)).x;
 
-        float c_left  = read_imagef(rawImage,  (int2)(x - 2, y)).x;
-        float c_right = read_imagef(rawImage,  (int2)(x + 2, y)).x;
-        float c_up    = read_imagef(rawImage,  (int2)(x, y - 2)).x;
-        float c_down  = read_imagef(rawImage,  (int2)(x, y + 2)).x;
+        float c_left  = read_imagef(rawImage, (int2)(x - 2, y)).x;
+        float c_right = read_imagef(rawImage, (int2)(x + 2, y)).x;
+        float c_up    = read_imagef(rawImage, (int2)(x, y - 2)).x;
+        float c_down  = read_imagef(rawImage, (int2)(x, y + 2)).x;
         float c_dh    = fabs(c_left + c_right - 2 * c_xy);
         float c_dv    = fabs(c_up + c_down - 2 * c_xy);
 
@@ -84,7 +95,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
 
         write_imagef(greenImage, imageCoordinates, clamp(sample, 0.0f, 1.0f));
     } else {
-        write_imagef(greenImage, imageCoordinates, read_imagef(rawImage,  (int2)(x, y)).x);
+        write_imagef(greenImage, imageCoordinates, read_imagef(rawImage, (int2)(x, y)).x);
     }
 }
 
@@ -154,10 +165,10 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
             float g_up      = read_imagef(greenImage, (int2)(x, y - 1)).x;
             float g_down    = read_imagef(greenImage, (int2)(x, y + 1)).x;
 
-            float c1_left    = g_left  - read_imagef(rawImage, (int2)(x - 1, y)).x;
-            float c1_right   = g_right - read_imagef(rawImage, (int2)(x + 1, y)).x;
-            float c2_up      = g_up    - read_imagef(rawImage, (int2)(x, y - 1)).x;
-            float c2_down    = g_down  - read_imagef(rawImage, (int2)(x, y + 1)).x;
+            float c1_left   = g_left  - read_imagef(rawImage, (int2)(x - 1, y)).x;
+            float c1_right  = g_right - read_imagef(rawImage, (int2)(x + 1, y)).x;
+            float c2_up     = g_up    - read_imagef(rawImage, (int2)(x, y - 1)).x;
+            float c2_down   = g_down  - read_imagef(rawImage, (int2)(x, y + 1)).x;
 
             float c1 = green - (c1_left + c1_right) / 2;
             float c2 = green - (c2_up + c2_down) / 2;
@@ -174,4 +185,23 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
     }
 
     write_imagef(rgbImage, imageCoordinates, (float4)(clamp((float3)(red, green, blue), 0.0f, 1.0f), 0));
+}
+
+static float3 sigmoid(float3 x, float s) {
+    return 0.5 * (tanh(s * x - 0.3 * s) + 1);
+}
+
+static float3 toneCurve(float3 x) {
+    float s = 3.5;
+    return (sigmoid(native_powr(x, 1/2.2), s) - sigmoid(0, s)) / (sigmoid(1, s) - sigmoid(0, s));
+}
+
+kernel void convertTosRGB(read_only image2d_t linearImage, write_only image2d_t rgbImage,
+                          constant float3 transform[3]) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+
+    float3 linear = read_imagef(linearImage, imageCoordinates).xyz;
+    float3 rgb = (float3) (dot(transform[0], linear), dot(transform[1], linear), dot(transform[2], linear));
+
+    write_imagef(rgbImage, imageCoordinates, (float4) (toneCurve(0.8 * clamp(rgb, 0.0f, 1.0f)), 0.0f));
 }

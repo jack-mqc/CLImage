@@ -30,7 +30,7 @@ typedef std::variant<uint8_t, uint16_t, uint32_t, int8_t, int16_t, int32_t, floa
                      std::vector<int8_t>, std::vector<int16_t>, std::vector<int32_t>,
                      std::vector<float>, std::vector<double>, std::string> tiff_metadata_item;
 
-struct tiff_metadata: public std::unordered_map<ttag_t, tiff_metadata_item> { };
+class tiff_metadata: public std::unordered_map<ttag_t, tiff_metadata_item> { };
 
 void getExifMetaData(TIFF* tif, tiff_metadata* metadata);
 

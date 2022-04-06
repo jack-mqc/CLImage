@@ -59,7 +59,7 @@ static float toneCurve(float x) {
     return (sigmoid(pow(x, 1/2.2), s) - sigmoid(0, s)) / (sigmoid(1, s) - sigmoid(0, s));
 }
 
-static gls::image<gls::rgb_pixel>::unique_ptr applyToneCurve(const gls::image<gls::rgb_pixel_16>& image) {
+gls::image<gls::rgb_pixel>::unique_ptr applyToneCurve(const gls::image<gls::rgb_pixel_16>& image) {
     auto output_image = std::make_unique<gls::image<gls::rgb_pixel>>(image.width, image.height);
 
     int max_val = 0;
@@ -100,31 +100,32 @@ int main(int argc, const char* argv[]) {
 
         LOG_INFO(TAG) << "Processing: " << input_path.filename() << std::endl;
 
-        gls::tiff_metadata metadata;
-        const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &metadata);
+//        gls::tiff_metadata metadata;
+//        const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &metadata);
 
 //        metadata[TIFFTAG_COLORMATRIX1] = std::vector<float>{ 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553 };
 //        metadata[TIFFTAG_ASSHOTNEUTRAL] = std::vector<float>{ 0.7380, 1, 0.5207 };
 
         // inputImage->write_png_file((input_path.parent_path() / input_path.stem()).string() + ".png");
 
-//        gls::tiff_metadata metadata;
-//        IMX492Metadata(&metadata);
-//        const auto inputImage = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
+        gls::tiff_metadata metadata;
+        IMX492Metadata(&metadata);
+        const auto inputImage = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
 
         LOG_INFO(TAG) << "read inputImage of size: " << inputImage->width << " x " << inputImage->height << std::endl;
 
-        const auto rgb_image = demosaicImage(*inputImage, metadata);
+        const bool useGPU = true;
+        if (useGPU) {
+            const auto rgb_image = demosaicImageGPU(*inputImage, metadata);
+            rgb_image->write_png_file(input_path.replace_extension("_rgb.png"), /*skip_alpha=*/ true);
+        } else {
+            const auto rgb_image = demosaicImage(*inputImage, metadata);
+            auto output_image = applyToneCurve(*rgb_image);
+            LOG_INFO(TAG) << "...done with demosaicing (CPU)." << std::endl;
+            output_image->write_png_file(input_path.replace_extension("_rgb.png"));
+        }
 
-        rgb_image->write_tiff_file(input_path.replace_extension("_rgb.tiff").c_str());
-
-        auto output_image = applyToneCurve(*rgb_image);
-        output_image->write_png_file(input_path.replace_extension(".png"));
-
-        LOG_INFO(TAG) << "done with inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
-
-        auto output_file = input_path.replace_extension("_my.dng").c_str();
-
-        inputImage->write_dng_file(output_file, /*compression=*/ gls::JPEG, &metadata);
+//        auto output_file = input_path.replace_extension("_my.dng").c_str();
+//        inputImage->write_dng_file(output_file, /*compression=*/ gls::JPEG, &metadata);
     }
 }

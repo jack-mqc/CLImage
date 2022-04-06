@@ -274,9 +274,13 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
             TIFFGetField(tif, TIFFTAG_SUBIFD, &subifdCount, &subIFD);
 
             uint16_t numberOfDirectories = TIFFNumberOfDirectories(tif);
+#if defined(__ANDROID__)
+            printf("numberOfDirectories: %d, subfileType: %d, subifdCount: %d, subIFD: %ld\n",
+                   numberOfDirectories, subfileType, subifdCount, subIFD[0]);
+#else
             printf("numberOfDirectories: %d, subfileType: %d, subifdCount: %d, subIFD: %lld\n",
                    numberOfDirectories, subfileType, subifdCount, subIFD[0]);
-
+#endif
             for (int i = 0; i < subifdCount; i++) {
                 TIFFSetSubDirectory(tif, subIFD[i]);
 

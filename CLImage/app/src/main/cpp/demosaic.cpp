@@ -24,6 +24,8 @@
 #include "gls_logging.h"
 #include "gls_cl_image.hpp"
 
+static const char* TAG = "CLImage Pipeline";
+
 enum { red = 0, green = 1, blue = 2, green2 = 3 };
 
 static const std::array<std::array<gls::point, 4>, 4> bayerOffsets = {{
@@ -261,7 +263,160 @@ gls::Matrix<3, 3> cam_xyz_coeff(gls::Vector<3>& pre_mul, const gls::Matrix<3, 3>
     return inverse(mPreMul * rgb_cam);
 }
 
-static const char* TAG = "CLImage Pipeline";
+void unpackRawMetadata(const gls::tiff_metadata& metadata,
+                       BayerPattern *bayerPattern,
+                       float *black_level,
+                       gls::Vector<4> *scale_mul,
+                       gls::Matrix<3, 3> *rgb_cam) {
+    const auto color_matrix1 = getVector<float>(metadata, TIFFTAG_COLORMATRIX1);
+    const auto color_matrix2 = getVector<float>(metadata, TIFFTAG_COLORMATRIX2);
+
+    // If present ColorMatrix2 is usually D65 and ColorMatrix1 is Standard Light A
+    const auto& color_matrix = color_matrix2.empty() ? color_matrix1 : color_matrix2;
+
+    const auto as_shot_neutral = getVector<float>(metadata, TIFFTAG_ASSHOTNEUTRAL);
+    const auto black_level_vec = getVector<float>(metadata, TIFFTAG_BLACKLEVEL);
+    const auto white_level_vec = getVector<uint32_t>(metadata, TIFFTAG_WHITELEVEL);
+    const auto cfa_pattern = getVector<uint8_t>(metadata, TIFFTAG_CFAPATTERN);
+
+    *black_level = black_level_vec.empty() ? 0 : black_level_vec[0];
+    const uint32_t white_level = white_level_vec.empty() ? 0xffff : white_level_vec[0];
+
+    *bayerPattern = std::memcmp(cfa_pattern.data(), "\00\01\01\02", 4) == 0 ? BayerPattern::rggb
+                  : std::memcmp(cfa_pattern.data(), "\02\01\01\00", 4) == 0 ? BayerPattern::bggr
+                  : std::memcmp(cfa_pattern.data(), "\01\00\02\01", 4) == 0 ? BayerPattern::grbg
+                  : BayerPattern::gbrg;
+
+    std::cout << "as_shot_neutral: " << gls::Vector<3>(as_shot_neutral) << std::endl;
+
+    gls::Vector<3> cam_mul = 1.0 / gls::Vector<3>(as_shot_neutral);
+
+    // TODO: this should be CameraCalibration * ColorMatrix * AsShotWhite
+    gls::Matrix<3, 3> cam_xyz = color_matrix;
+
+    std::cout << "cam_xyz:\n" << cam_xyz << std::endl;
+
+    gls::Vector<3> pre_mul;
+    *rgb_cam = cam_xyz_coeff(pre_mul, cam_xyz);
+
+    std::cout << "*** pre_mul: " << pre_mul << std::endl;
+    std::cout << "*** cam_mul: " << cam_mul << std::endl;
+
+    // Save the whitening transformation
+    const auto inv_cam_white = pre_mul;
+
+    gls::Matrix<3, 3> mCamMul = {
+        { pre_mul[0] / cam_mul[0], 0, 0 },
+        { 0, pre_mul[1] / cam_mul[1], 0 },
+        { 0, 0, pre_mul[2] / cam_mul[2] }
+    };
+
+    // If cam_mul is available use that instead of pre_mul
+    for (int i = 0; i < 3; i++) {
+        pre_mul[i] = cam_mul[i];
+    }
+
+    {
+        const gls::Vector<3> d65_white = { 0.95047, 1.0, 1.08883 };
+        const gls::Vector<3> d50_white = { 0.9642, 1.0000, 0.8249 };
+
+        std::cout << "XYZ D65 White -> sRGB: " << rgb_xyz * d65_white << std::endl;
+        std::cout << "sRGB White -> XYZ D65: " << xyz_rgb * gls::Vector({1, 1, 1}) << std::endl;
+        std::cout << "inverse(cam_xyz) * (1 / pre_mul): " << inverse(cam_xyz) * (1 / pre_mul) << std::endl;
+
+        auto cam_white = cam_xyz * xyz_rgb * gls::Vector<3>({ 1, 1, 1 });
+        std::cout << "inverse(cam_xyz) * cam_white: " << inverse(cam_xyz) * cam_white << ", CCT: " << XYZtoCorColorTemp(inverse(cam_xyz) * cam_white) << std::endl;
+        std::cout << "xyz_rgb * gls::Vector<3>({ 1, 1, 1 }): " << xyz_rgb * gls::Vector<3>({ 1, 1, 1 }) << ", CCT: " << XYZtoCorColorTemp(xyz_rgb * gls::Vector<3>({ 1, 1, 1 })) << std::endl;
+
+        std::cout << "***>> pizza: " << XYZtoCorColorTemp(xyz_rgb * *rgb_cam * ((1 / pre_mul) * gls::Vector<3>({ 1, 1, 1 }))) << std::endl;
+
+        const auto wb_out = xyz_rgb * *rgb_cam * mCamMul * gls::Vector({1, 1, 1});
+        std::cout << "wb_out: " << wb_out << ", CCT: " << XYZtoCorColorTemp(wb_out) << std::endl;
+
+        const auto no_wb_out = xyz_rgb * *rgb_cam * (1 / inv_cam_white);
+        std::cout << "no_wb_out: " << wb_out << ", CCT: " << XYZtoCorColorTemp(no_wb_out) << std::endl;
+    }
+
+    // Scale Input Image
+    auto minmax = std::minmax_element(std::begin(pre_mul), std::end(pre_mul));
+    for (int c = 0; c < 4; c++) {
+        int pre_mul_idx = c == 3 ? 1 : c;
+        printf("pre_mul[c]: %f, *minmax.second: %f, white_level: %d\n", pre_mul[pre_mul_idx], *minmax.second, white_level);
+        (*scale_mul)[c] = (pre_mul[pre_mul_idx] / *minmax.first) * 65535.0 / (white_level - *black_level);
+    }
+    printf("scale_mul: %f, %f, %f, %f\n", *scale_mul[0], *scale_mul[1], *scale_mul[2], *scale_mul[3]);
+}
+
+gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
+                                                        const gls::tiff_metadata& metadata) {
+    BayerPattern bayerPattern;
+    float black_level;
+    gls::Vector<4> scale_mul;
+    gls::Matrix<3, 3> rgb_cam;
+
+    LOG_INFO(TAG) << "Begin demosaicing image (CPU)..." << std::endl;
+
+    unpackRawMetadata(metadata, &bayerPattern, &black_level, &scale_mul, &rgb_cam);
+
+    const auto offsets = bayerOffsets[bayerPattern];
+    gls::image<gls::luma_pixel_16> scaledRawImage = gls::image<gls::luma_pixel_16>(rawImage.width, rawImage.height);
+    for (int y = 0; y < rawImage.height / 2; y++) {
+        for (int x = 0; x < rawImage.width / 2; x++) {
+            for (int c = 0; c < 4; c++) {
+                const auto& o = offsets[c];
+                scaledRawImage[2 * y + o.y][2 * x + o.x] = clamp(scale_mul[c] * (rawImage[2 * y + o.y][2 * x + o.x] - black_level));
+            }
+        }
+    }
+
+    auto rgbImage = std::make_unique<gls::image<gls::rgb_pixel_16>>(rawImage.width, rawImage.height);
+
+    printf("interpolating green channel...\n");
+    interpolateGreen(scaledRawImage, rgbImage.get(), bayerPattern);
+
+    printf("interpolating red and blue channels...\n");
+    interpolateRedBlue(rgbImage.get(), bayerPattern);
+
+    // Transform to RGB space
+    for (int y = 0; y < rgbImage->height; y++) {
+        for (int x = 0; x < rgbImage->width; x++) {
+            auto& p = (*rgbImage)[y][x];
+            const auto op = rgb_cam * /* mCamMul * */ gls::Vector<3>({ (float) p[0], (float) p[1], (float) p[2] });
+            p = { clamp(op[0]), clamp(op[1]), clamp(op[2]) };
+        }
+    }
+
+    return rgbImage;
+}
+
+int scaleRawData(gls::OpenCLContext* glsContext,
+                 const gls::cl_image_2d<gls::luma_pixel_16>& rawImage,
+                 gls::cl_image_2d<gls::luma_pixel_16>* scaledRawImage,
+                 BayerPattern bayerPattern, gls::Vector<4> scaleMul, float blackLevel) {
+    try {
+        // Load the shader source
+        const auto blurProgram = glsContext->loadProgram("demosaic");
+
+        // Bind the kernel parameters
+        auto bayerToRGBKernel = cl::KernelFunctor<cl::Image2D,  // rawImage
+                                                  cl::Image2D,  // scaledRawImage
+                                                  int,          // bayerPattern
+                                                  cl::Buffer,   // scaleMul
+                                                  float         // blackLevel
+                                                  >(blurProgram, "scaleRawData");
+
+        cl::Buffer scaleMulBuffer(scaleMul.begin(), scaleMul.end(), true);
+
+        // Work on one Quad (2x2) at a time
+        bayerToRGBKernel(gls::OpenCLContext::buildEnqueueArgs(scaledRawImage->width/2, scaledRawImage->height/2),
+                         rawImage.getImage2D(), scaledRawImage->getImage2D(), bayerPattern, scaleMulBuffer, blackLevel);
+        return 0;
+    } catch (cl::Error& err) {
+        LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what()) << " - " << gls::clStatusToString(err.err())
+                       << std::endl;
+        return -1;
+    }
+}
 
 int interpolateGreen(gls::OpenCLContext* glsContext,
                      const gls::cl_image_2d<gls::luma_pixel_16>& rawImage,
@@ -315,133 +470,74 @@ int interpolateRedBlue(gls::OpenCLContext* glsContext,
     }
 }
 
-gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                        const gls::tiff_metadata& metadata) {
-    const auto color_matrix1 = getVector<float>(metadata, TIFFTAG_COLORMATRIX1);
-    const auto color_matrix2 = getVector<float>(metadata, TIFFTAG_COLORMATRIX2);
+int convertTosRGB(gls::OpenCLContext* glsContext,
+                  const gls::cl_image_2d<gls::rgba_pixel_16>& linearImage,
+                  gls::cl_image_2d<gls::rgba_pixel>* rgbImage,
+                  const gls::Matrix<3, 3>& transform) {
+    try {
+        // Load the shader source
+        const auto blurProgram = glsContext->loadProgram("demosaic");
 
-    // If present ColorMatrix2 is usually D65 and ColorMatrix1 is Standard Light A
-    const auto& color_matrix = color_matrix2.empty() ? color_matrix1 : color_matrix2;
-
-    const auto as_shot_neutral = getVector<float>(metadata, TIFFTAG_ASSHOTNEUTRAL);
-    const auto black_level_vec = getVector<float>(metadata, TIFFTAG_BLACKLEVEL);
-    const auto white_level_vec = getVector<uint32_t>(metadata, TIFFTAG_WHITELEVEL);
-    const auto cfa_pattern = getVector<uint8_t>(metadata, TIFFTAG_CFAPATTERN);
-
-    const float black_level = black_level_vec.empty() ? 0 : black_level_vec[0];
-    const uint32_t white_level = white_level_vec.empty() ? 0xffff : white_level_vec[0];
-
-    const auto bayerPattern = std::memcmp(cfa_pattern.data(), "\00\01\01\02", 4) == 0 ? BayerPattern::rggb
-                            : std::memcmp(cfa_pattern.data(), "\02\01\01\00", 4) == 0 ? BayerPattern::bggr
-                            : std::memcmp(cfa_pattern.data(), "\01\00\02\01", 4) == 0 ? BayerPattern::grbg
-                            : BayerPattern::gbrg;
-
-    std::cout << "as_shot_neutral: " << gls::Vector<3>(as_shot_neutral) << std::endl;
-
-    gls::Vector<3> cam_mul = 1.0 / gls::Vector<3>(as_shot_neutral);
-
-    // TODO: this should be CameraCalibration * ColorMatrix * AsShotWhite
-    gls::Matrix<3, 3> cam_xyz = color_matrix;
-
-    std::cout << "cam_xyz:\n" << cam_xyz << std::endl;
-
-    gls::Vector<3> pre_mul;
-    const auto rgb_cam = cam_xyz_coeff(pre_mul, cam_xyz);
-
-    std::cout << "*** pre_mul: " << pre_mul << std::endl;
-    std::cout << "*** cam_mul: " << cam_mul << std::endl;
-
-    // Save the whitening transformation
-    const auto inv_cam_white = pre_mul;
-
-    gls::Matrix<3, 3> mCamMul = {
-        { pre_mul[0] / cam_mul[0], 0, 0 },
-        { 0, pre_mul[1] / cam_mul[1], 0 },
-        { 0, 0, pre_mul[2] / cam_mul[2] }
-    };
-
-    // If cam_mul is available use that instead of pre_mul
-    for (int i = 0; i < 3; i++) {
-        pre_mul[i] = cam_mul[i];
-    }
-
-    {
-        const gls::Vector<3> d65_white = { 0.95047, 1.0, 1.08883 };
-        const gls::Vector<3> d50_white = { 0.9642, 1.0000, 0.8249 };
-
-        std::cout << "XYZ D65 White -> sRGB: " << rgb_xyz * d65_white << std::endl;
-        std::cout << "sRGB White -> XYZ D65: " << xyz_rgb * gls::Vector({1, 1, 1}) << std::endl;
-        std::cout << "inverse(cam_xyz) * (1 / pre_mul): " << inverse(cam_xyz) * (1 / pre_mul) << std::endl;
-
-        auto cam_white = cam_xyz * xyz_rgb * gls::Vector<3>({ 1, 1, 1 });
-        std::cout << "inverse(cam_xyz) * cam_white: " << inverse(cam_xyz) * cam_white << ", CCT: " << XYZtoCorColorTemp(inverse(cam_xyz) * cam_white) << std::endl;
-        std::cout << "xyz_rgb * gls::Vector<3>({ 1, 1, 1 }): " << xyz_rgb * gls::Vector<3>({ 1, 1, 1 }) << ", CCT: " << XYZtoCorColorTemp(xyz_rgb * gls::Vector<3>({ 1, 1, 1 })) << std::endl;
-
-        std::cout << "***>> pizza: " << XYZtoCorColorTemp(xyz_rgb * rgb_cam * ((1 / pre_mul) * gls::Vector<3>({ 1, 1, 1 }))) << std::endl;
-
-        const auto wb_out = xyz_rgb * rgb_cam * mCamMul * gls::Vector({1, 1, 1});
-        std::cout << "wb_out: " << wb_out << ", CCT: " << XYZtoCorColorTemp(wb_out) << std::endl;
-
-        const auto no_wb_out = xyz_rgb * rgb_cam * (1 / inv_cam_white);
-        std::cout << "no_wb_out: " << wb_out << ", CCT: " << XYZtoCorColorTemp(no_wb_out) << std::endl;
-    }
-
-    // Scale Input Image
-    auto minmax = std::minmax_element(std::begin(pre_mul), std::end(pre_mul));
-    gls::Vector<4> scale_mul;
-    for (int c = 0; c < 4; c++) {
-        int pre_mul_idx = c == 3 ? 1 : c;
-        printf("pre_mul[c]: %f, *minmax.second: %f, white_level: %d\n", pre_mul[pre_mul_idx], *minmax.second, white_level);
-        scale_mul[c] = (pre_mul[pre_mul_idx] / *minmax.first) * 65535.0 / (white_level - black_level);
-    }
-    printf("scale_mul: %f, %f, %f, %f\n", scale_mul[0], scale_mul[1], scale_mul[2], scale_mul[3]);
-
-    const auto offsets = bayerOffsets[bayerPattern];
-    gls::image<gls::luma_pixel_16> scaledRawImage = gls::image<gls::luma_pixel_16>(rawImage.width, rawImage.height);
-    for (int y = 0; y < rawImage.height / 2; y++) {
-        for (int x = 0; x < rawImage.width / 2; x++) {
-            for (int c = 0; c < 4; c++) {
-                const auto& o = offsets[c];
-                scaledRawImage[2 * y + o.y][2 * x + o.x] = clamp(scale_mul[c] * (rawImage[2 * y + o.y][2 * x + o.x] - black_level));
+        // float4 transform[3];
+        gls::Matrix<3, 4> paddedTransform;
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) {
+                paddedTransform[r][c] = transform[r][c];
             }
         }
-    }
 
-    // *** BEGIN OpenCL ***
+        cl::Buffer transformBuffer(paddedTransform.span().begin(), paddedTransform.span().end(), true);
+
+        // Bind the kernel parameters
+        auto bayerToRGBKernel = cl::KernelFunctor<cl::Image2D,  // linearImage
+                                                  cl::Image2D,  // rgbImage
+                                                  cl::Buffer    // transform
+                                                  >(blurProgram, "convertTosRGB");
+
+        // Schedule the kernel on the GPU
+        bayerToRGBKernel(gls::OpenCLContext::buildEnqueueArgs(rgbImage->width, rgbImage->height),
+                         linearImage.getImage2D(), rgbImage->getImage2D(), transformBuffer);
+        return 0;
+    } catch (cl::Error& err) {
+        LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what()) << " - " << gls::clStatusToString(err.err())
+                       << std::endl;
+        return -1;
+    }
+}
+
+gls::image<gls::rgba_pixel>::unique_ptr demosaicImageGPU(const gls::image<gls::luma_pixel_16>& rawImage,
+                                                         const gls::tiff_metadata& metadata) {
+    BayerPattern bayerPattern;
+    float black_level;
+    gls::Vector<4> scale_mul;
+    gls::Matrix<3, 3> rgb_cam;
+
+    unpackRawMetadata(metadata, &bayerPattern, &black_level, &scale_mul, &rgb_cam);
 
     gls::OpenCLContext glsContext("");
     auto clContext = glsContext.clContext();
 
-    gls::cl_image_2d<gls::luma_pixel_16> clScaledRawImage(clContext, scaledRawImage);
+    LOG_INFO(TAG) << "Begin demosaicing image (GPU)..." << std::endl;
+
+    gls::cl_image_2d<gls::luma_pixel_16> clRawImage(clContext, rawImage);
+    gls::cl_image_2d<gls::luma_pixel_16> clScaledRawImage(clContext, rawImage.width, rawImage.height);
+
+    scaleRawData(&glsContext, clRawImage, &clScaledRawImage, bayerPattern, scale_mul, black_level / 0xffff);
+
     gls::cl_image_2d<gls::luma_pixel_16> clGreenImage(clContext, rawImage.width, rawImage.height);
 
     interpolateGreen(&glsContext, clScaledRawImage, &clGreenImage, bayerPattern);
 
-    gls::cl_image_2d<gls::rgba_pixel_16> clRGBImage(clContext, rawImage.width, rawImage.height);
+    gls::cl_image_2d<gls::rgba_pixel_16> clLinearRGBImage(clContext, rawImage.width, rawImage.height);
 
-    interpolateRedBlue(&glsContext, clScaledRawImage, clGreenImage, &clRGBImage, bayerPattern);
+    interpolateRedBlue(&glsContext, clScaledRawImage, clGreenImage, &clLinearRGBImage, bayerPattern);
 
-    auto rgbaImage = clRGBImage.toImage();
+    gls::cl_image_2d<gls::rgba_pixel> clsRGBImage(clContext, rawImage.width, rawImage.height);
+    convertTosRGB(&glsContext, clLinearRGBImage, &clsRGBImage, rgb_cam);
 
-    // *** END OpenCL ***
+    auto rgbaImage = clsRGBImage.toImage();
 
-//    printf("interpolating green channel...\n");
-//    interpolateGreen(scaledRawImage, rgbImage.get(), bayerPattern);
-//
-//    printf("interpolating red and blue channels...\n");
-//    interpolateRedBlue(rgbImage.get(), bayerPattern);
+    LOG_INFO(TAG) << "...done with demosaicing (GPU)." << std::endl;
 
-    printf("...done with demosaicing.\n");
-
-    // Transform to RGB space
-    auto rgbImage = std::make_unique<gls::image<gls::rgb_pixel_16>>(rawImage.width, rawImage.height);
-    for (int y = 0; y < rgbImage->height; y++) {
-        for (int x = 0; x < rgbImage->width; x++) {
-            const auto& p = (*rgbaImage)[y][x];
-            const auto op = rgb_cam * /* mCamMul * */ gls::Vector<3>({ (float) p[0], (float) p[1], (float) p[2] });
-            (*rgbImage)[y][x] = { clamp(op[0]), clamp(op[1]), clamp(op[2]) };
-        }
-    }
-
-    return rgbImage;
+    return rgbaImage;
 }
