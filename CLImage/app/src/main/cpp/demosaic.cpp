@@ -150,111 +150,111 @@ void interpolateGreen(const gls::image<gls::luma_pixel_16>& rawImage,
     // get the constant component out of the reconstructed green pixels and add to it
     // the "high frequency" part of the corresponding observed color channel
 
-    for (int y = 2; y < height - 2; y++) {
-        int channel = (y & 1) == (r.y & 1) ? red : blue;
-        int x0 = 2 + ((y & 1) == (g.y & 1) ? g.x + 1 : g.x);
-
-        int g_xy            = (*rgbImage)[y][x0][green];
-        int g_left          = (*rgbImage)[y][x0 - 2][green];
-        int g_top_left      = (*rgbImage)[y - 2][x0 - 2][green];
-        int g_bottom_left   = (*rgbImage)[y + 2][x0 - 2][green];
-
-        int c_xy            = (*rgbImage)[y][x0][channel];
-        int c_left          = (*rgbImage)[y][x0 - 2][channel];
-        int c_top_left      = (*rgbImage)[y - 2][x0 - 2][channel];
-        int c_bottom_left   = (*rgbImage)[y + 2][x0 - 2][channel];
-
-        for (int x = 2; x < width - 2; x += 2) {
-            int g_right         = (*rgbImage)[y][x + 2][green];
-            int g_top_right     = (*rgbImage)[y - 2][x + 2][green];
-            int g_bottom_right  = (*rgbImage)[y + 2][x + 2][green];
-            int g_up            = (*rgbImage)[y - 2][x][green];
-            int g_down          = (*rgbImage)[y + 2][x][green];
-
-            int c_right         = (*rgbImage)[y][x + 2][channel];
-            int c_top_right     = (*rgbImage)[y - 2][x + 2][channel];
-            int c_bottom_right  = (*rgbImage)[y + 2][x + 2][channel];
-            int c_up            = (*rgbImage)[y - 2][x][channel];
-            int c_down          = (*rgbImage)[y + 2][x][channel];
-
-            // Only work on the pixels that have a strong enough correlation between channels
-
-            if (g_xy < 4 * c_xy && c_xy < 4 * g_xy) {
-                int dh = g_xy - (g_left + g_right) / 2;
-                int dv = g_xy - (g_up + g_down) / 2;
-                int ne = g_xy - (g_top_left + g_bottom_right) / 2;
-                int nw = g_xy - (g_top_right + g_bottom_left) / 2;
-
-                int cdh = c_xy - (c_left + c_right) / 2;
-                int cdv = c_xy - (c_up + c_down) / 2;
-                int cne = c_xy - (c_top_left + c_bottom_right) / 2;
-                int cnw = c_xy - (c_top_right + c_bottom_left) / 2;
-
-                enum GradientDirection {
-                    horizontal = 0,
-                    vertical = 1,
-                    northEast = 2,
-                    northWest = 3,
-                    none = 4
-                };
-
-                int gradients[4] = {
-                    abs(dh) + abs(cdh), // horizontal
-                    abs(dv) + abs(cdv), // vertical
-                    abs(ne) + abs(cne), // northEast
-                    abs(nw) + abs(cnw)  // northWest
-                };
-
-                GradientDirection minimumDirection = none;
-                int minimumGradient = INT_MAX;
-                for (GradientDirection g : { horizontal, vertical, northEast, northWest }) {
-                    if (gradients[g] < minimumGradient) {
-                        minimumDirection = g;
-                        minimumGradient = gradients[g];
-                    }
-                }
-
-                // Only work on parts of the image that have enough "detail"
-
-                if (minimumDirection != none && minimumGradient > g_xy / 4) {
-                    int sample;
-                    switch (minimumDirection) {
-                        case horizontal:
-                            sample = (g_xy + (g_left + g_right) / 2 + cdh) / 2;
-                            break;
-                        case vertical:
-                            sample = (g_xy + (g_up + g_down) / 2 + cdv) / 2;
-                            break;
-                        case northEast:
-                            sample = (g_xy + (g_top_left + g_bottom_right) / 2 + cne) / 2;
-                            break;
-                        case northWest:
-                            sample = (g_xy + (g_top_right + g_bottom_left) / 2 + cnw) / 2;
-                            break;
-                        case none:
-                            // never happens, just make the compiler happy
-                            sample = (*rgbImage)[y][x][green];
-                            break;
-                    }
-
-                    (*rgbImage)[y][x][green] = clamp(sample);
-                }
-            }
-
-            g_left          = g_xy;
-            g_xy            = g_right;
-            g_top_left      = g_up;
-            g_up            = g_top_right;
-            g_bottom_left   = g_down;
-            g_down          = g_bottom_right;
-            c_left          = c_xy;
-            c_xy            = c_right;
-            c_top_left      = c_up;
-            c_up            = c_top_right;
-            c_bottom_left   = c_down;
-            c_down          = c_bottom_right;
-        }
-    }
+//    for (int y = 2; y < height - 2; y++) {
+//        int channel = (y & 1) == (r.y & 1) ? red : blue;
+//        int x0 = 2 + ((y & 1) == (g.y & 1) ? g.x + 1 : g.x);
+//
+//        int g_xy            = (*rgbImage)[y][x0][green];
+//        int g_left          = (*rgbImage)[y][x0 - 2][green];
+//        int g_top_left      = (*rgbImage)[y - 2][x0 - 2][green];
+//        int g_bottom_left   = (*rgbImage)[y + 2][x0 - 2][green];
+//
+//        int c_xy            = (*rgbImage)[y][x0][channel];
+//        int c_left          = (*rgbImage)[y][x0 - 2][channel];
+//        int c_top_left      = (*rgbImage)[y - 2][x0 - 2][channel];
+//        int c_bottom_left   = (*rgbImage)[y + 2][x0 - 2][channel];
+//
+//        for (int x = 2; x < width - 2; x += 2) {
+//            int g_right         = (*rgbImage)[y][x + 2][green];
+//            int g_top_right     = (*rgbImage)[y - 2][x + 2][green];
+//            int g_bottom_right  = (*rgbImage)[y + 2][x + 2][green];
+//            int g_up            = (*rgbImage)[y - 2][x][green];
+//            int g_down          = (*rgbImage)[y + 2][x][green];
+//
+//            int c_right         = (*rgbImage)[y][x + 2][channel];
+//            int c_top_right     = (*rgbImage)[y - 2][x + 2][channel];
+//            int c_bottom_right  = (*rgbImage)[y + 2][x + 2][channel];
+//            int c_up            = (*rgbImage)[y - 2][x][channel];
+//            int c_down          = (*rgbImage)[y + 2][x][channel];
+//
+//            // Only work on the pixels that have a strong enough correlation between channels
+//
+//            if (g_xy < 4 * c_xy && c_xy < 4 * g_xy) {
+//                int dh = g_xy - (g_left + g_right) / 2;
+//                int dv = g_xy - (g_up + g_down) / 2;
+//                int ne = g_xy - (g_top_left + g_bottom_right) / 2;
+//                int nw = g_xy - (g_top_right + g_bottom_left) / 2;
+//
+//                int cdh = c_xy - (c_left + c_right) / 2;
+//                int cdv = c_xy - (c_up + c_down) / 2;
+//                int cne = c_xy - (c_top_left + c_bottom_right) / 2;
+//                int cnw = c_xy - (c_top_right + c_bottom_left) / 2;
+//
+//                enum GradientDirection {
+//                    horizontal = 0,
+//                    vertical = 1,
+//                    northEast = 2,
+//                    northWest = 3,
+//                    none = 4
+//                };
+//
+//                int gradients[4] = {
+//                    abs(dh) + abs(cdh), // horizontal
+//                    abs(dv) + abs(cdv), // vertical
+//                    abs(ne) + abs(cne), // northEast
+//                    abs(nw) + abs(cnw)  // northWest
+//                };
+//
+//                GradientDirection minimumDirection = none;
+//                int minimumGradient = INT_MAX;
+//                for (GradientDirection g : { horizontal, vertical, northEast, northWest }) {
+//                    if (gradients[g] < minimumGradient) {
+//                        minimumDirection = g;
+//                        minimumGradient = gradients[g];
+//                    }
+//                }
+//
+//                // Only work on parts of the image that have enough "detail"
+//
+//                if (minimumDirection != none && minimumGradient > g_xy / 4) {
+//                    int sample;
+//                    switch (minimumDirection) {
+//                        case horizontal:
+//                            sample = (g_xy + (g_left + g_right) / 2 + cdh) / 2;
+//                            break;
+//                        case vertical:
+//                            sample = (g_xy + (g_up + g_down) / 2 + cdv) / 2;
+//                            break;
+//                        case northEast:
+//                            sample = (g_xy + (g_top_left + g_bottom_right) / 2 + cne) / 2;
+//                            break;
+//                        case northWest:
+//                            sample = (g_xy + (g_top_right + g_bottom_left) / 2 + cnw) / 2;
+//                            break;
+//                        case none:
+//                            // never happens, just make the compiler happy
+//                            sample = (*rgbImage)[y][x][green];
+//                            break;
+//                    }
+//
+//                    (*rgbImage)[y][x][green] = clamp(sample);
+//                }
+//            }
+//
+//            g_left          = g_xy;
+//            g_xy            = g_right;
+//            g_top_left      = g_up;
+//            g_up            = g_top_right;
+//            g_bottom_left   = g_down;
+//            g_down          = g_bottom_right;
+//            c_left          = c_xy;
+//            c_xy            = c_right;
+//            c_top_left      = c_up;
+//            c_up            = c_top_right;
+//            c_bottom_left   = c_down;
+//            c_down          = c_bottom_right;
+//        }
+//    }
 }
 
 void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayerPattern) {

@@ -50,28 +50,45 @@ void IMX571Metadata(gls::tiff_metadata *metadata) {
     metadata->insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0xffff } });
 }
 
-static float sigmoid(float x, float b) {
-    return tanh(x - b) - tanh(-b);
+static float sigmoid(float x, float s) {
+    return 0.5 * (tanh(s * x - 0.3 * s) + 1);
 }
 
-static float toneCurve(float p) {
-    float b = 1.0f;
-    return sigmoid(2 * sqrt(p), b) / (sigmoid(1.0f, b) - sigmoid(0.0f, b));
+static float toneCurve(float x) {
+    float s = 3.5;
+    return (sigmoid(pow(x, 1/2.2), s) - sigmoid(0, s)) / (sigmoid(1, s) - sigmoid(0, s));
 }
 
 static gls::image<gls::rgb_pixel>::unique_ptr applyToneCurve(const gls::image<gls::rgb_pixel_16>& image) {
     auto output_image = std::make_unique<gls::image<gls::rgb_pixel>>(image.width, image.height);
 
+    int max_val = 0;
+    int max_out = 0;
     for (int y = 0; y < image.height; y++) {
         for (int x = 0; x < image.width; x++) {
             const gls::rgb_pixel_16 &p = image[y][x];
-            (*output_image)[y][x] = {
-                clamp8(0xff * toneCurve(p[0] / (float) 0xffff)),
-                clamp8(0xff * toneCurve(p[1] / (float) 0xffff)),
-                clamp8(0xff * toneCurve(p[2] / (float) 0xffff))
+
+            auto maxp = std::max(p.red, std::max(p.red, p.blue));
+            if (maxp > max_val) {
+                max_val = maxp;
+            }
+
+            auto op = (*output_image)[y][x] = {
+                clamp8(0xff * toneCurve(0.8 * p[0] / (float) 0xffff)),
+                clamp8(0xff * toneCurve(0.8 * p[1] / (float) 0xffff)),
+                clamp8(0xff * toneCurve(0.8 * p[2] / (float) 0xffff))
             };
+
+            auto maxop = std::max(op.red, std::max(op.red, op.blue));
+            if (maxop > max_out) {
+                max_out = maxop;
+            }
+
         }
     }
+
+    printf("max_val: %d, max_out: %d, tc(1): %f\n", max_val, max_out, toneCurve(1.0));
+
     return output_image;
 }
 
@@ -89,7 +106,7 @@ int main(int argc, const char* argv[]) {
 //        metadata[TIFFTAG_COLORMATRIX1] = std::vector<float>{ 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553 };
 //        metadata[TIFFTAG_ASSHOTNEUTRAL] = std::vector<float>{ 0.7380, 1, 0.5207 };
 
-        inputImage->write_png_file((input_path.parent_path() / input_path.stem()).string() + ".png");
+        // inputImage->write_png_file((input_path.parent_path() / input_path.stem()).string() + ".png");
 
 //        gls::tiff_metadata metadata;
 //        IMX492Metadata(&metadata);
@@ -104,10 +121,10 @@ int main(int argc, const char* argv[]) {
         auto output_image = applyToneCurve(*rgb_image);
         output_image->write_png_file(input_path.replace_extension(".png"));
 
-//        LOG_INFO(TAG) << "done with inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
-//
-//        auto output_file = input_path.replace_extension("_my.dng").c_str();
-//
-//        inputImage->write_dng_file(output_file, /*compression=*/ gls::JPEG, &metadata);
+        LOG_INFO(TAG) << "done with inputImage size: " << inputImage->width << " x " << inputImage->height << std::endl;
+
+        auto output_file = input_path.replace_extension("_my.dng").c_str();
+
+        inputImage->write_dng_file(output_file, /*compression=*/ gls::JPEG, &metadata);
     }
 }
