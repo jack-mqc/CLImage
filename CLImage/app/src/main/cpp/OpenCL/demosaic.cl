@@ -58,7 +58,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         float c_dv    = fabs(c_up + c_down - 2 * c_xy);
 
         // Minimum derivative value for edge directed interpolation (avoid aliasing)
-        float dThreshold = 0.002; // TODO: use noise model
+        float dThreshold = 0.0183; // TODO: use noise model
 
         // we're doing edge directed bilinear interpolation on the green channel,
         // which is a low pass operation (averaging), so we add some signal from the
@@ -126,7 +126,7 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
             float d_nw_se = fabs(c2_top_right - c2_bottom_left);
 
             // Minimum gradient for edge directed interpolation
-            float dThreshold = 0.01f; // TODO: use noise model
+            float dThreshold = 0.0122f; // TODO: use noise model
             float c2;
             if (d_ne_sw > dThreshold && d_ne_sw > d_nw_se) {
                 c2 = green - (c2_top_right + c2_bottom_left) / 2;
