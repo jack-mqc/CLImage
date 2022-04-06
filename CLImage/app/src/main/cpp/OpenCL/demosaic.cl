@@ -41,24 +41,24 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
     int x0 = (y & 1) == (g.y & 1) ? g.x + 1 : g.x;
 
     if ((x0 & 1) == (x & 1)) {
-        float g_left  = read_imagef(rawImage,  (int2)(x - 1, y)).x; // (*rgbImage)[y][x - 1][green];
-        float g_right = read_imagef(rawImage,  (int2)(x + 1, y)).x; // (*rgbImage)[y][x + 1][green];
-        float g_up    = read_imagef(rawImage,  (int2)(x, y - 1)).x; // (*rgbImage)[y - 1][x][green];
-        float g_down  = read_imagef(rawImage,  (int2)(x, y + 1)).x; // (*rgbImage)[y + 1][x][green];
+        float g_left  = read_imagef(rawImage,  (int2)(x - 1, y)).x;
+        float g_right = read_imagef(rawImage,  (int2)(x + 1, y)).x;
+        float g_up    = read_imagef(rawImage,  (int2)(x, y - 1)).x;
+        float g_down  = read_imagef(rawImage,  (int2)(x, y + 1)).x;
         float g_dh    = fabs(g_left - g_right);
         float g_dv    = fabs(g_up - g_down);
 
-        float c_xy    = read_imagef(rawImage,  (int2)(x, y)).x; // (*rgbImage)[y][x][color];
+        float c_xy    = read_imagef(rawImage,  (int2)(x, y)).x;
 
-        float c_left  = read_imagef(rawImage,  (int2)(x - 2, y)).x; // (*rgbImage)[y][x - 2][color];
-        float c_right = read_imagef(rawImage,  (int2)(x + 2, y)).x; // (*rgbImage)[y][x + 2][color];
-        float c_up    = read_imagef(rawImage,  (int2)(x, y - 2)).x; // (*rgbImage)[y - 2][x][color];
-        float c_down  = read_imagef(rawImage,  (int2)(x, y + 2)).x; // (*rgbImage)[y + 2][x][color];
+        float c_left  = read_imagef(rawImage,  (int2)(x - 2, y)).x;
+        float c_right = read_imagef(rawImage,  (int2)(x + 2, y)).x;
+        float c_up    = read_imagef(rawImage,  (int2)(x, y - 2)).x;
+        float c_down  = read_imagef(rawImage,  (int2)(x, y + 2)).x;
         float c_dh    = fabs(c_left + c_right - 2 * c_xy);
         float c_dv    = fabs(c_up + c_down - 2 * c_xy);
 
         // Minimum derivative value for edge directed interpolation (avoid aliasing)
-        float dThreshold = 0.002; // TODO: noise sigma
+        float dThreshold = 0.002; // TODO: use noise model
 
         // we're doing edge directed bilinear interpolation on the green channel,
         // which is a low pass operation (averaging), so we add some signal from the
@@ -126,7 +126,7 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
             float d_nw_se = fabs(c2_top_right - c2_bottom_left);
 
             // Minimum gradient for edge directed interpolation
-            float dThreshold = 0.01f;
+            float dThreshold = 0.01f; // TODO: use noise model
             float c2;
             if (d_ne_sw > dThreshold && d_ne_sw > d_nw_se) {
                 c2 = green - (c2_top_right + c2_bottom_left) / 2;
