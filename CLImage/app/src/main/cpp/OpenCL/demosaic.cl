@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// const sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
-
 enum BayerPattern {
     grbg = 0,
     gbrg = 1,
@@ -187,13 +185,129 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
     write_imagef(rgbImage, imageCoordinates, (float4)(clamp((float3)(red, green, blue), 0.0f, 1.0f), 0));
 }
 
-static float3 sigmoid(float3 x, float s) {
+float3 sigmoid(float3 x, float s) {
     return 0.5 * (tanh(s * x - 0.3 * s) + 1);
 }
 
-static float3 toneCurve(float3 x) {
+// This tone curve is designed to mostly match the default curve from DNG files
+// TODO: it would be nice to have separate control on highlights and shhadows contrast
+
+float3 toneCurve(float3 x) {
     float s = 3.5;
-    return (sigmoid(native_powr(x, 1/2.2), s) - sigmoid(0, s)) / (sigmoid(1, s) - sigmoid(0, s));
+    return (sigmoid(native_powr(0.95 * x, 0.5), s) - sigmoid(0, s)) / (sigmoid(1, s) - sigmoid(0, s));
+}
+
+//float3 saturationBoost(float3 value, float saturation) {
+//    // Saturation boost with highlight protection
+//    const float luma = 0.2126f * value.x + 0.7152f * value.y + 0.0722f * value.z; // BT.709-2 (sRGB) luma primaries
+//    const float3 clipping = smoothstep(0.75f, 2.0f, value);
+//    return mix(luma, value, mix(saturation, 1.0, clipping));
+//}
+
+float3 contrastBoost(float3 value, float contrast) {
+    const float gray = 0.2;
+    const float3 clipping = smoothstep(0.9f, 2.0f, value);
+    return mix(gray, value, mix(contrast, 1.0f, clipping));
+}
+
+float3 gaussianBlur(image2d_t inputImage, int2 imageCoordinates) {
+    // Compute a blurred version of the image
+    float3 blurred_pixel = 0;
+    float3 kernel_norm = 0;
+    const int filterSize = 5;
+    const float sigmaS = (float) filterSize / 3.0f;
+    for (int y = -filterSize / 2; y <= filterSize / 2; y++) {
+        for (int x = -filterSize / 2; x <= filterSize / 2; x++) {
+            float kernelWeight = native_exp(-((float)(x * x + y * y) / (2 * sigmaS * sigmaS)));
+            blurred_pixel += kernelWeight * read_imagef(inputImage, imageCoordinates + (int2)(x, y)).xyz;
+            kernel_norm += kernelWeight;
+        }
+    }
+    return blurred_pixel / kernel_norm;
+}
+
+float3 sharpen(float3 pixel_value, image2d_t inputImage, int2 imageCoordinates) {
+    float3 dx = read_imagef(inputImage, imageCoordinates + (int2)(1, 0)).xyz - pixel_value;
+    float3 dy = read_imagef(inputImage, imageCoordinates + (int2)(0, 1)).xyz - pixel_value;
+
+    const float amount = 1.25;
+
+    // Smart sharpening
+    float3 sharpening = amount * smoothstep(0.0f, 0.03f, length(dx) + length(dy))       // Gradient magnitude thresholding
+                               * (1.0f - smoothstep(0.95f, 1.0f, pixel_value))          // Highlight ringing protection
+                               * (0.6f + 0.4f * smoothstep(0.0f, 0.1f, pixel_value));   // Shadows ringing protection
+
+    float3 blurred_pixel = gaussianBlur(inputImage, imageCoordinates);
+
+    return mix(blurred_pixel, pixel_value, fmax(sharpening, 1.0f));
+}
+
+float3 denoiseRGB(float3 inputValue, image2d_t inputImage, int2 imageCoordinates) {
+    // Compute a blurred version of the image
+    const int filterSize = 5;
+    const float sigmaR = 0.0025f;
+
+    float3 filtered_pixel = 0;
+    float3 kernel_norm = 0;
+    for (int y = -filterSize / 2; y <= filterSize / 2; y++) {
+        for (int x = -filterSize / 2; x <= filterSize / 2; x++) {
+            float3 inputSample = read_imagef(inputImage, imageCoordinates + (int2)(x, y)).xyz;
+
+            float3 inputDiff = (inputSample - inputValue);
+            float sampleWeight = exp(-0.3f * dot(inputDiff, inputDiff) / (2 * sigmaR * sigmaR));
+
+            filtered_pixel += sampleWeight * inputSample;
+            kernel_norm += sampleWeight;
+        }
+    }
+    return filtered_pixel / kernel_norm;
+}
+
+float3 rgbToYCbCr(float3 inputValue) {
+    const float3 matrix[3] = {
+        {  0.2126,  0.7152,  0.0722 },
+        { -0.1146, -0.3854,  0.5    },
+        {  0.5,    -0.4542, -0.0458 }
+    };
+
+    return (float3) (dot(matrix[0], inputValue), dot(matrix[1], inputValue), dot(matrix[2], inputValue));
+}
+
+float3 yCbCrtoRGB(float3 inputValue) {
+    const float3 matrix[3] = {
+        { 1.0,  0.0,      1.5748 },
+        { 1.0, -0.1873,  -0.4681 },
+        { 1.0,  1.8556,   0.0    }
+    };
+
+    return (float3) (dot(matrix[0], inputValue), dot(matrix[1], inputValue), dot(matrix[2], inputValue));
+}
+
+float3 denoiseLumaChroma(float3 inputValue, image2d_t inputImage, int2 imageCoordinates) {
+    // Compute a blurred version of the image
+    float3 blurred_pixel = 0;
+    float3 kernel_norm = 0;
+    const int filterSize = 5;
+    const float lumaSigmaR = 0.0005f;
+    const float chromaSigmaR = 0.1f;
+
+    const float3 inputYCC = rgbToYCbCr(inputValue);
+
+    for (int y = -filterSize / 2; y <= filterSize / 2; y++) {
+        for (int x = -filterSize / 2; x <= filterSize / 2; x++) {
+            float3 inputSampleYCC = rgbToYCbCr(read_imagef(inputImage, imageCoordinates + (int2)(x, y)).xyz);
+
+            float3 inputDiff = inputSampleYCC - inputYCC;
+            float lumaWeight = exp(-0.3f * dot(inputDiff.x, inputDiff.x) / (2 * lumaSigmaR * lumaSigmaR));
+            float chromaWeight = exp(-0.3f * dot(inputDiff.yz, inputDiff.yz) / (2 * chromaSigmaR * chromaSigmaR));
+
+            float3 sampleWeight = (float3) (lumaWeight, chromaWeight, chromaWeight);
+
+            blurred_pixel += sampleWeight * inputSampleYCC;
+            kernel_norm += sampleWeight;
+        }
+    }
+    return yCbCrtoRGB(blurred_pixel / kernel_norm);
 }
 
 kernel void convertTosRGB(read_only image2d_t linearImage, write_only image2d_t rgbImage,
@@ -201,7 +315,14 @@ kernel void convertTosRGB(read_only image2d_t linearImage, write_only image2d_t 
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
     float3 linear = read_imagef(linearImage, imageCoordinates).xyz;
+
+    linear = denoiseLumaChroma(linear, linearImage, imageCoordinates);
+
+    linear = sharpen(linear, linearImage, imageCoordinates);
+
+    linear = contrastBoost(linear, 1.025);
+
     float3 rgb = (float3) (dot(transform[0], linear), dot(transform[1], linear), dot(transform[2], linear));
 
-    write_imagef(rgbImage, imageCoordinates, (float4) (toneCurve(0.8 * clamp(rgb, 0.0f, 1.0f)), 0.0f));
+    write_imagef(rgbImage, imageCoordinates, (float4) (toneCurve(clamp(rgb, 0.0f, 1.0f)), 0.0f));
 }

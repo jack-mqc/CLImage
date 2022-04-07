@@ -354,9 +354,9 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
     gls::Vector<4> scale_mul;
     gls::Matrix<3, 3> rgb_cam;
 
-    LOG_INFO(TAG) << "Begin demosaicing image (CPU)..." << std::endl;
-
     unpackRawMetadata(metadata, &bayerPattern, &black_level, &scale_mul, &rgb_cam);
+
+    LOG_INFO(TAG) << "Begin demosaicing image (CPU)..." << std::endl;
 
     const auto offsets = bayerOffsets[bayerPattern];
     gls::image<gls::luma_pixel_16> scaledRawImage = gls::image<gls::luma_pixel_16>(rawImage.width, rawImage.height);
