@@ -54,8 +54,6 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         float g_right = read_imagef(rawImage, (int2)(x + 1, y)).x;
         float g_up    = read_imagef(rawImage, (int2)(x, y - 1)).x;
         float g_down  = read_imagef(rawImage, (int2)(x, y + 1)).x;
-        float g_dh    = fabs(g_left - g_right);
-        float g_dv    = fabs(g_up - g_down);
 
         float c_xy    = read_imagef(rawImage, (int2)(x, y)).x;
 
@@ -63,33 +61,46 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         float c_right = read_imagef(rawImage, (int2)(x + 2, y)).x;
         float c_up    = read_imagef(rawImage, (int2)(x, y - 2)).x;
         float c_down  = read_imagef(rawImage, (int2)(x, y + 2)).x;
-        float c_dh    = fabs(c_left + c_right - 2 * c_xy);
-        float c_dv    = fabs(c_up + c_down - 2 * c_xy);
 
-        // Minimum derivative value for edge directed interpolation (avoid aliasing)
-        float dThreshold = 0.0183; // TODO: use noise model
+        float2 dv = (float2) (fabs(g_left - g_right), fabs(g_up - g_down));
+        dv += (float2) (fabs(c_left + c_right - 2 * c_xy),
+                        fabs(c_up + c_down - 2 * c_xy));
+
+        // If the gradient at this location is too, low compute it on a 3x3 patch
+        if (length(dv) < 0.1) {
+            dv = 0;
+            for (int j = -1; j <= 1; j++) {
+                for (int i = -1; i <= 1; i++) {
+                    float v_left  = read_imagef(rawImage, (int2)(x+i - 1, j+y)).x;
+                    float v_right = read_imagef(rawImage, (int2)(x+i + 1, j+y)).x;
+                    float v_up    = read_imagef(rawImage, (int2)(x+i, j+y - 1)).x;
+                    float v_down  = read_imagef(rawImage, (int2)(x+i, j+y + 1)).x;
+
+                    dv += (float2) (fabs(v_left - v_right), fabs(v_up - v_down));
+                }
+            }
+        }
 
         // we're doing edge directed bilinear interpolation on the green channel,
         // which is a low pass operation (averaging), so we add some signal from the
         // high frequencies of the observed color channel
 
-        float sample;
-        if (g_dv + c_dv > dThreshold && g_dv + c_dv > g_dh + c_dh) {
-            sample = (g_left + g_right) / 2;
-            if (sample < 4 * c_xy && c_xy < 4 * sample) {
-                sample += (c_xy - (c_left + c_right) / 2) / 4;
-            }
-        } else if (g_dh + c_dh > dThreshold && g_dh + c_dh > g_dv + c_dv) {
-            sample = (g_up + g_down) / 2;
-            if (sample < 4 * c_xy && c_xy < 4 * sample) {
-                sample += (c_xy - (c_up + c_down) / 2) / 4;
-            }
-        } else {
-            sample = (g_up + g_left + g_down + g_right) / 4;
-            if (sample < 4 * c_xy && c_xy < 4 * sample) {
-                sample += (c_xy - (c_left + c_right + c_up + c_down) / 4) / 8;
-            }
+        float sample_h = (g_left + g_right) / 2;
+        if (sample_h < 4 * c_xy && c_xy < 4 * sample_h) {
+            sample_h += (c_xy - (c_left + c_right) / 2) / 4;
         }
+
+        float sample_v = (g_up + g_down) / 2;
+        if (sample_v < 4 * c_xy && c_xy < 4 * sample_v) {
+            sample_v += (c_xy - (c_up + c_down) / 2) / 4;
+        }
+
+        // We really want to snap the interpolation to either horizontal or vertical,
+        // except for when we're really close to flat.
+
+        float vh_alpha = atan2(dv.y, dv.x) / M_PI_2_F;
+        float sample = mix(sample_v, sample_h,
+                           0.5 * smoothstep(0.4, 0.5, vh_alpha) + 0.5 * smoothstep(0.5, 0.6, vh_alpha));
 
         write_imagef(greenImage, imageCoordinates, clamp(sample, 0.0f, 1.0f));
     } else {
@@ -131,19 +142,11 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
             float c2_bottom_left  = g_bottom_left  - read_imagef(rawImage, (int2)(x - 1, y + 1)).x;
             float c2_bottom_right = g_bottom_right - read_imagef(rawImage, (int2)(x + 1, y + 1)).x;
 
-            float d_ne_sw = fabs(c2_top_left - c2_bottom_right);
-            float d_nw_se = fabs(c2_top_right - c2_bottom_left);
+            float2 dc = (float2) (fabs(c2_top_left - c2_bottom_right), fabs(c2_top_right - c2_bottom_left));
 
-            // Minimum gradient for edge directed interpolation
-            float dThreshold = 0.0122f; // TODO: use noise model
-            float c2;
-            if (d_ne_sw > dThreshold && d_ne_sw > d_nw_se) {
-                c2 = green - (c2_top_right + c2_bottom_left) / 2;
-            } else if (d_nw_se > dThreshold && d_nw_se > d_ne_sw) {
-                c2 = green - (c2_top_left + c2_bottom_right) / 2;
-            } else {
-                c2 = green - (c2_top_left + c2_top_right + c2_bottom_left + c2_bottom_right) / 4;
-            }
+            float alpha = length(dc) > 0.01 ? atan2(dc.y, dc.x) / M_PI_2_F : 0.5;
+            float c2 = green - mix((c2_top_right + c2_bottom_left) / 2,
+                                   (c2_top_left + c2_bottom_right) / 2, alpha);
 
             if (color == raw_red) {
                 red = c1;
@@ -188,7 +191,6 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
 /// ---- Image Denoising ----
 
 float3 denoiseRGB(float3 inputValue, image2d_t inputImage, int2 imageCoordinates) {
-    // Compute a blurred version of the image
     const int filterSize = 5;
     const float sigmaR = 0.0025f;
 
@@ -229,7 +231,6 @@ float3 yCbCrtoRGB(float3 inputValue) {
 }
 
 float3 denoiseLumaChroma(float3 inputValue, image2d_t inputImage, int2 imageCoordinates) {
-    // Compute a blurred version of the image
     float3 blurred_pixel = 0;
     float3 kernel_norm = 0;
     const int filterSize = 5;
