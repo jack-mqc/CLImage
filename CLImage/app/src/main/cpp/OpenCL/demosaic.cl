@@ -62,11 +62,17 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         float c_up    = read_imagef(rawImage, (int2)(x, y - 2)).x;
         float c_down  = read_imagef(rawImage, (int2)(x, y + 2)).x;
 
-        float2 dv = (float2) (fabs(g_left - g_right), fabs(g_up - g_down));
-        dv += (float2) (fabs(c_left + c_right - 2 * c_xy),
-                        fabs(c_up + c_down - 2 * c_xy));
+        float c2_top_left       = read_imagef(rawImage, (int2)(x - 1, y - 1)).x;
+        float c2_top_right      = read_imagef(rawImage, (int2)(x + 1, y - 1)).x;
+        float c2_bottom_left    = read_imagef(rawImage, (int2)(x - 1, y + 1)).x;
+        float c2_bottom_right   = read_imagef(rawImage, (int2)(x + 1, y + 1)).x;
+        float c2_ave = (c2_top_left + c2_top_right + c2_bottom_left + c2_bottom_right) / 4;
 
-        // If the gradient at this location is too, low compute it on a 3x3 patch
+        float g_ave = (g_left + g_right + g_up + g_down) / 4;
+
+        float2 dv = (float2) (fabs(g_left - g_right), fabs(g_up - g_down));
+
+        // If the gradient estimation at this location is too weak, try it on a 3x3 patch
         if (length(dv) < 0.1) {
             dv = 0;
             for (int j = -1; j <= 1; j++) {
@@ -85,22 +91,21 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         // which is a low pass operation (averaging), so we add some signal from the
         // high frequencies of the observed color channel
 
-        float sample_h = (g_left + g_right) / 2;
-        if (sample_h < 4 * c_xy && c_xy < 4 * sample_h) {
-            sample_h += (c_xy - (c_left + c_right) / 2) / 4;
-        }
+        // Estimate the whiteness of the pixel value and use that to weight the amount of HF correction
+        float cMax = fmax(c_xy, fmax(g_ave, c2_ave));
+        float cMin = fmin(c_xy, fmin(g_ave, c2_ave));
+        float L = (cMax + cMin) / 2;
+        float S = L == 1 ? 0 : (cMax - cMin) / (1 - fabs(2 * L - 1));
+        float whiteness = smoothstep(0.4, 0.6, 1 - S);
 
-        float sample_v = (g_up + g_down) / 2;
-        if (sample_v < 4 * c_xy && c_xy < 4 * sample_v) {
-            sample_v += (c_xy - (c_up + c_down) / 2) / 4;
-        }
+        float sample_h = (g_left + g_right) / 2 + whiteness * (c_xy - (c_left + c_right) / 2) / 4;
+        float sample_v = (g_up + g_down) / 2 + whiteness * (c_xy - (c_up + c_down) / 2) / 4;
+        float sample_flat = g_ave + whiteness * (c_xy - (c_left + c_right + c_up + c_down) / 4) / 4;
 
-        // We really want to snap the interpolation to either horizontal or vertical,
-        // except for when we're really close to flat.
-
-        float vh_alpha = atan2(dv.y, dv.x) / M_PI_2_F;
-        float sample = mix(sample_v, sample_h,
-                           0.5 * smoothstep(0.4, 0.5, vh_alpha) + 0.5 * smoothstep(0.5, 0.6, vh_alpha));
+        // TODO: replace eps with some multiple of sigma from the noise model
+        float eps = 0.01;
+        float flatness = 1 - smoothstep(eps / 2, eps, fabs(dv.x - dv.y));
+        float sample = mix(dv.x > dv.y ? sample_v : sample_h, sample_flat, flatness);
 
         write_imagef(greenImage, imageCoordinates, clamp(sample, 0.0f, 1.0f));
     } else {
