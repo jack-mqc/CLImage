@@ -263,21 +263,64 @@ gls::Matrix<3, 3> cam_xyz_coeff(gls::Vector<3>& pre_mul, const gls::Matrix<3, 3>
     return inverse(mPreMul * rgb_cam);
 }
 
-void unpackRawMetadata(const gls::tiff_metadata& metadata,
+void white_balance(const gls::image<gls::luma_pixel_16>& rawImage, gls::Vector<3>* pre_mul, uint32_t white, uint32_t black, BayerPattern bayerPattern) {
+    const auto offsets = bayerOffsets[bayerPattern];
+
+    double dsum[8];
+    memset (dsum, 0, sizeof dsum);
+    for (int y = 0; y < rawImage.height/2; y += 8) {
+        for (int x = 0; x < rawImage.width/2; x += 8) {
+            int sum[8];
+            memset (sum, 0, sizeof sum);
+            for (int j = 0; j < 8 && y + j < rawImage.height/2; j++) {
+                for (int i = 0; i < 8 && x + i < rawImage.width/2; i++) {
+                    for (int c = 0; c < 4; c++) {
+                        const auto& o = offsets[c];
+                        int val = rawImage[2 * (y + j) + o.y][2 * (x + i) + o.x];
+                        if (val > white - 25) {
+                            goto skip_block;
+                        }
+                        if ((val -= black) < 0)
+                            val = 0;
+                        sum[c] += val;
+                        sum[c+4]++;
+                    }
+                }
+            }
+            for (int i = 0; i < 8; i++) {
+                dsum[i] += sum[i];
+            }
+            skip_block:
+            ;
+        }
+    }
+    dsum[1] += dsum[3];
+    dsum[5] += dsum[7];
+
+    for (int c = 0; c < 3; c++) {
+        if (dsum[c] != 0) {
+            (*pre_mul)[c] = dsum[c+4] / dsum[c];
+        }
+    }
+}
+
+void unpackRawMetadata(const gls::image<gls::luma_pixel_16>& rawImage,
+                       gls::tiff_metadata* metadata,
                        BayerPattern *bayerPattern,
                        float *black_level,
                        gls::Vector<4> *scale_mul,
-                       gls::Matrix<3, 3> *rgb_cam) {
-    const auto color_matrix1 = getVector<float>(metadata, TIFFTAG_COLORMATRIX1);
-    const auto color_matrix2 = getVector<float>(metadata, TIFFTAG_COLORMATRIX2);
+                       gls::Matrix<3, 3> *rgb_cam,
+                       bool auto_white_balance) {
+    const auto color_matrix1 = getVector<float>(*metadata, TIFFTAG_COLORMATRIX1);
+    const auto color_matrix2 = getVector<float>(*metadata, TIFFTAG_COLORMATRIX2);
 
     // If present ColorMatrix2 is usually D65 and ColorMatrix1 is Standard Light A
     const auto& color_matrix = color_matrix2.empty() ? color_matrix1 : color_matrix2;
 
-    const auto as_shot_neutral = getVector<float>(metadata, TIFFTAG_ASSHOTNEUTRAL);
-    const auto black_level_vec = getVector<float>(metadata, TIFFTAG_BLACKLEVEL);
-    const auto white_level_vec = getVector<uint32_t>(metadata, TIFFTAG_WHITELEVEL);
-    const auto cfa_pattern = getVector<uint8_t>(metadata, TIFFTAG_CFAPATTERN);
+    auto as_shot_neutral = getVector<float>(*metadata, TIFFTAG_ASSHOTNEUTRAL);
+    const auto black_level_vec = getVector<float>(*metadata, TIFFTAG_BLACKLEVEL);
+    const auto white_level_vec = getVector<uint32_t>(*metadata, TIFFTAG_WHITELEVEL);
+    const auto cfa_pattern = getVector<uint8_t>(*metadata, TIFFTAG_CFAPATTERN);
 
     *black_level = black_level_vec.empty() ? 0 : black_level_vec[0];
     const uint32_t white_level = white_level_vec.empty() ? 0xffff : white_level_vec[0];
@@ -305,6 +348,14 @@ void unpackRawMetadata(const gls::tiff_metadata& metadata,
     // Save the whitening transformation
     const auto inv_cam_white = pre_mul;
 
+    if (auto_white_balance) {
+        white_balance(rawImage, &cam_mul, white_level, *black_level, *bayerPattern);
+        for (int c = 0; c < 3; c++) {
+            as_shot_neutral[c] = 1 / cam_mul[c];
+        }
+        (*metadata)[TIFFTAG_ASSHOTNEUTRAL] = as_shot_neutral;
+    }
+
     gls::Matrix<3, 3> mCamMul = {
         { pre_mul[0] / cam_mul[0], 0, 0 },
         { 0, pre_mul[1] / cam_mul[1], 0 },
@@ -328,8 +379,6 @@ void unpackRawMetadata(const gls::tiff_metadata& metadata,
         std::cout << "inverse(cam_xyz) * cam_white: " << inverse(cam_xyz) * cam_white << ", CCT: " << XYZtoCorColorTemp(inverse(cam_xyz) * cam_white) << std::endl;
         std::cout << "xyz_rgb * gls::Vector<3>({ 1, 1, 1 }): " << xyz_rgb * gls::Vector<3>({ 1, 1, 1 }) << ", CCT: " << XYZtoCorColorTemp(xyz_rgb * gls::Vector<3>({ 1, 1, 1 })) << std::endl;
 
-        std::cout << "***>> pizza: " << XYZtoCorColorTemp(xyz_rgb * *rgb_cam * ((1 / pre_mul) * gls::Vector<3>({ 1, 1, 1 }))) << std::endl;
-
         const auto wb_out = xyz_rgb * *rgb_cam * mCamMul * gls::Vector({1, 1, 1});
         std::cout << "wb_out: " << wb_out << ", CCT: " << XYZtoCorColorTemp(wb_out) << std::endl;
 
@@ -348,13 +397,13 @@ void unpackRawMetadata(const gls::tiff_metadata& metadata,
 }
 
 gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                        const gls::tiff_metadata& metadata) {
+                                                        gls::tiff_metadata* metadata, bool auto_white_balance) {
     BayerPattern bayerPattern;
     float black_level;
     gls::Vector<4> scale_mul;
     gls::Matrix<3, 3> rgb_cam;
 
-    unpackRawMetadata(metadata, &bayerPattern, &black_level, &scale_mul, &rgb_cam);
+    unpackRawMetadata(rawImage, metadata, &bayerPattern, &black_level, &scale_mul, &rgb_cam, auto_white_balance);
 
     LOG_INFO(TAG) << "Begin demosaicing image (CPU)..." << std::endl;
 
@@ -529,13 +578,13 @@ int convertTosRGB(gls::OpenCLContext* glsContext,
 }
 
 gls::image<gls::rgba_pixel>::unique_ptr demosaicImageGPU(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                         const gls::tiff_metadata& metadata) {
+                                                         gls::tiff_metadata* metadata, bool auto_white_balance) {
     BayerPattern bayerPattern;
     float black_level;
     gls::Vector<4> scale_mul;
     gls::Matrix<3, 3> rgb_cam;
 
-    unpackRawMetadata(metadata, &bayerPattern, &black_level, &scale_mul, &rgb_cam);
+    unpackRawMetadata(rawImage, metadata, &bayerPattern, &black_level, &scale_mul, &rgb_cam, auto_white_balance);
 
     gls::OpenCLContext glsContext("");
     auto clContext = glsContext.clContext();

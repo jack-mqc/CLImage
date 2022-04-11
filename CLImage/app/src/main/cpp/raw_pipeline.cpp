@@ -15,6 +15,7 @@
 
 #include <filesystem>
 #include <string>
+#include <cmath>
 
 #include "gls_logging.h"
 #include "gls_image.hpp"
@@ -32,12 +33,12 @@ inline uint8_t clamp8(int x) { return x < 0 ? 0 : x > 0xff ? 0xff : x; }
 
 // IMX492 M43-ish Sony Sensor
 void IMX492Metadata(gls::tiff_metadata *metadata) {
-    metadata->insert({ TIFFTAG_COLORMATRIX1, std::vector<float>{ 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553 } });
-    metadata->insert({ TIFFTAG_ASSHOTNEUTRAL, std::vector<float>{ 0.7380, 1, 0.5207 } });
+    metadata->insert({ TIFFTAG_COLORMATRIX1, std::vector<float>{ 1.0475, -0.3850, -0.0955, -0.0902, 0.9891, 0.1012 , -0.0011, 0.1587, 0.3547 } });
+    metadata->insert({ TIFFTAG_ASSHOTNEUTRAL, std::vector<float>{ 1 / 2.001460, 1, 1 / 1.864002 } });
     metadata->insert({ TIFFTAG_CFAREPEATPATTERNDIM, std::vector<uint16_t>{ 2, 2 } });
     metadata->insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 1, 2, 0, 1 } });
     metadata->insert({ TIFFTAG_BLACKLEVEL, std::vector<float>{ 0 } });
-    metadata->insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0x0fff } });
+    metadata->insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0xfff } });
 }
 
 // IMX571 APS-C Sony Sensor
@@ -83,7 +84,6 @@ gls::image<gls::rgb_pixel>::unique_ptr applyToneCurve(const gls::image<gls::rgb_
             if (maxop > max_out) {
                 max_out = maxop;
             }
-
         }
     }
 
@@ -100,32 +100,29 @@ int main(int argc, const char* argv[]) {
 
         LOG_INFO(TAG) << "Processing: " << input_path.filename() << std::endl;
 
-//        gls::tiff_metadata metadata;
-//        const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &metadata);
-
-//        metadata[TIFFTAG_COLORMATRIX1] = std::vector<float>{ 1.9435, -0.8992, -0.1936, 0.1144, 0.8380, 0.0475, 0.0136, 0.1203, 0.3553 };
-//        metadata[TIFFTAG_ASSHOTNEUTRAL] = std::vector<float>{ 0.7380, 1, 0.5207 };
-
-        // inputImage->write_png_file((input_path.parent_path() / input_path.stem()).string() + ".png");
-
         gls::tiff_metadata metadata;
-        IMX492Metadata(&metadata);
-        const auto inputImage = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
+        const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &metadata);
+
+        // inputImage->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_raw.png");
+
+//        gls::tiff_metadata metadata;
+//        IMX492Metadata(&metadata);
+//        const auto inputImage = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
 
         LOG_INFO(TAG) << "read inputImage of size: " << inputImage->width << " x " << inputImage->height << std::endl;
 
         const bool useGPU = true;
         if (useGPU) {
-            const auto rgb_image = demosaicImageGPU(*inputImage, metadata);
-            rgb_image->write_png_file(input_path.replace_extension("_rgb.png"), /*skip_alpha=*/ true);
+            const auto rgb_image = demosaicImageGPU(*inputImage, &metadata, true);
+            rgb_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_rgb.png", /*skip_alpha=*/ true);
         } else {
-            const auto rgb_image = demosaicImage(*inputImage, metadata);
+            const auto rgb_image = demosaicImage(*inputImage, &metadata, true);
             auto output_image = applyToneCurve(*rgb_image);
             LOG_INFO(TAG) << "...done with demosaicing (CPU)." << std::endl;
-            output_image->write_png_file(input_path.replace_extension("_rgb.png"));
+            output_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_rgb.png");
         }
 
-//        auto output_file = input_path.replace_extension("_my.dng").c_str();
-//        inputImage->write_dng_file(output_file, /*compression=*/ gls::JPEG, &metadata);
+        auto output_file = (input_path.parent_path() / input_path.stem()).string() + "_my.dng";
+        inputImage->write_dng_file(output_file, /*compression=*/ gls::JPEG, &metadata);
     }
 }
