@@ -263,7 +263,127 @@ gls::Matrix<3, 3> cam_xyz_coeff(gls::Vector<3>& pre_mul, const gls::Matrix<3, 3>
     return inverse(mPreMul * rgb_cam);
 }
 
-void white_balance(const gls::image<gls::luma_pixel_16>& rawImage, gls::Vector<3>* pre_mul, uint32_t white, uint32_t black, BayerPattern bayerPattern) {
+gls::rectangle alignToQuad(const gls::rectangle& rect) {
+    gls::rectangle alignedRect = rect;
+    if (alignedRect.y & 1) {
+        alignedRect.y += 1;
+        alignedRect.height -= 1;
+    }
+    if (alignedRect.height & 1) {
+        alignedRect.height -= 1;
+    }
+    if (alignedRect.x & 1) {
+        alignedRect.x += 1;
+        alignedRect.width -= 1;
+    }
+    if (alignedRect.width & 1) {
+        alignedRect.width -= 1;
+    }
+    return alignedRect;
+}
+
+const constexpr int GmbSamplesCount = 24;
+
+void colorcheck(const gls::image<gls::luma_pixel_16>& rawImage, BayerPattern bayerPattern, uint32_t black, gls::rectangle gmb_samples[GmbSamplesCount]) {
+// ColorChecker Chart under 6500-kelvin illumination
+  static gls::Matrix<GmbSamplesCount, 3> gmb_xyY = {
+    { 0.400, 0.350, 10.1 },        // Dark Skin
+    { 0.377, 0.345, 35.8 },        // Light Skin
+    { 0.247, 0.251, 19.3 },        // Blue Sky
+    { 0.337, 0.422, 13.3 },        // Foliage
+    { 0.265, 0.240, 24.3 },        // Blue Flower
+    { 0.261, 0.343, 43.1 },        // Bluish Green
+    { 0.506, 0.407, 30.1 },        // Orange
+    { 0.211, 0.175, 12.0 },        // Purplish Blue
+    { 0.453, 0.306, 19.8 },        // Moderate Red
+    { 0.285, 0.202, 6.6  },        // Purple
+    { 0.380, 0.489, 44.3 },        // Yellow Green
+    { 0.473, 0.438, 43.1 },        // Orange Yellow
+    { 0.187, 0.129, 6.1  },        // Blue
+    { 0.305, 0.478, 23.4 },        // Green
+    { 0.539, 0.313, 12.0 },        // Red
+    { 0.448, 0.470, 59.1 },        // Yellow
+    { 0.364, 0.233, 19.8 },        // Magenta
+    { 0.196, 0.252, 19.8 },        // Cyan
+    { 0.310, 0.316, 90.0 },        // White
+    { 0.310, 0.316, 59.1 },        // Neutral 8
+    { 0.310, 0.316, 36.2 },        // Neutral 6.5
+    { 0.310, 0.316, 19.8 },        // Neutral 5
+    { 0.310, 0.316, 9.0 },         // Neutral 3.5
+    { 0.310, 0.316, 3.1 } };       // Black
+
+    const auto offsets = bayerOffsets[bayerPattern];
+
+    gls::image<gls::luma_pixel_16>* writeRawImage = (gls::image<gls::luma_pixel_16>*) &rawImage;
+
+    gls::Matrix<GmbSamplesCount, 4> gmb_cam;
+    gls::Matrix<GmbSamplesCount, 3> gmb_xyz;
+
+    std::array<int, 3> count;
+
+    for (int sq = 0; sq < GmbSamplesCount; sq++) {
+        for (int c = 0; c < 3; c++) {
+            count[c] = 0;
+        }
+
+        auto patch = alignToQuad(gmb_samples[sq]);
+        for (int y = patch.y; y < patch.y + patch.height; y += 2) {
+            for (int x = patch.x; x < patch.x + patch.width; x += 2) {
+                for (int c = 0; c < 4; c++) {
+                    const auto& o = offsets[c];
+                    int val = rawImage[y + o.y][x + o.x];
+                    gmb_cam[sq][c == 3 ? 1 : c] += val;
+                    count[c == 3 ? 1 : c]++;
+                    // Mark image to identify sampled areas
+                    (*writeRawImage)[y + o.y][x + o.x] = black + (val - black) / 2;
+                }
+            }
+        }
+
+        for (int c = 0; c < 3; c++) {
+            gmb_cam[sq][c] = gmb_cam[sq][c] / count[c] - black;
+        }
+        gmb_xyz[sq][0] = gmb_xyY[sq][2] * gmb_xyY[sq][0] / gmb_xyY[sq][1];
+        gmb_xyz[sq][1] = gmb_xyY[sq][2];
+        gmb_xyz[sq][2] = gmb_xyY[sq][2] * (1 - gmb_xyY[sq][0] - gmb_xyY[sq][1]) / gmb_xyY[sq][1];
+    }
+
+    gls::Matrix<GmbSamplesCount, 3> inverse = pseudoinverse(gmb_xyz);
+
+    gls::Matrix<3, 3> cam_xyz;
+    for (int pass=0; pass < 2; pass++) {
+        for (int i = 0; i < 3 /* colors */; i++) {
+            for (int j = 0; j < 3; j++) {
+                cam_xyz[i][j] = 0;
+                for (int k = 0; k < GmbSamplesCount; k++)
+                    cam_xyz[i][j] += gmb_cam[k][i] * inverse[k][j];
+            }
+        }
+
+        gls::Vector<3> pre_mul;
+        cam_xyz_coeff(pre_mul, cam_xyz);
+
+        gls::Vector<4> balance;
+        for (int c = 0; c < 4; c++) {
+            balance[c] = pre_mul[c == 3 ? 1 : c] * gmb_cam[20][c];
+        }
+        for (int sq = 0; sq < GmbSamplesCount; sq++) {
+            for (int c = 0; c < 4; c++) {
+                gmb_cam[sq][c] *= balance[c];
+            }
+        }
+    }
+
+    float norm = 1 / (cam_xyz[1][0] + cam_xyz[1][1] + cam_xyz[1][2]);
+    printf("Color Matrix: ");
+    for (int c = 0; c < 3; c++) {
+        for (int j = 0; j < 3; j++)
+            printf("%.4f, ", cam_xyz[c][j] * norm);
+    }
+    printf("\n");
+}
+
+void white_balance(const gls::image<gls::luma_pixel_16>& rawImage, gls::Vector<3>* wb_mul, uint32_t white, uint32_t black, BayerPattern bayerPattern) {
     const auto offsets = bayerOffsets[bayerPattern];
 
     double dsum[8];
@@ -299,10 +419,39 @@ void white_balance(const gls::image<gls::luma_pixel_16>& rawImage, gls::Vector<3
 
     for (int c = 0; c < 3; c++) {
         if (dsum[c] != 0) {
-            (*pre_mul)[c] = dsum[c+4] / dsum[c];
+            (*wb_mul)[c] = dsum[c+4] / dsum[c];
         }
     }
 }
+
+// Coordinates of the GretagMacbeth ColorChecker squares
+// x, y, width, height from 2022-04-07-17-21-33-023.png
+static gls::rectangle gmb_samples[GmbSamplesCount] = {
+    { 4729, 3390, 80, 80 },
+    { 4597, 3385, 66, 81 },
+    { 4459, 3380, 71, 74 },
+    { 4317, 3373, 70, 71 },
+    { 4172, 3366, 86, 78 },
+    { 4032, 3357, 86, 76 },
+    { 4742, 3256, 70, 71 },
+    { 4599, 3251, 81, 74 },
+    { 4462, 3244, 75, 73 },
+    { 4321, 3230, 75, 83 },
+    { 4184, 3223, 71, 78 },
+    { 4040, 3218, 80, 74 },
+    { 4751, 3118, 70, 73 },
+    { 4609, 3113, 72, 69 },
+    { 4469, 3106, 72, 72 },
+    { 4330, 3098, 75, 73 },
+    { 4189, 3097, 79, 62 },
+    { 4054, 3091, 69, 63 },
+    { 4757, 2979, 71, 74 },
+    { 4616, 2975, 65, 73 },
+    { 4475, 2965, 75, 74 },
+    { 4341, 2959, 67, 73 },
+    { 4200, 2952, 71, 72 },
+    { 4061, 2942, 72, 74 },
+};
 
 void unpackRawMetadata(const gls::image<gls::luma_pixel_16>& rawImage,
                        gls::tiff_metadata* metadata,
@@ -331,6 +480,9 @@ void unpackRawMetadata(const gls::image<gls::luma_pixel_16>& rawImage,
                   : BayerPattern::gbrg;
 
     std::cout << "as_shot_neutral: " << gls::Vector<3>(as_shot_neutral) << std::endl;
+
+    // Uncomment this to characterize sensor
+    // colorcheck(rawImage, *bayerPattern, *black_level, gmb_samples);
 
     gls::Vector<3> cam_mul = 1.0 / gls::Vector<3>(as_shot_neutral);
 
@@ -393,7 +545,7 @@ void unpackRawMetadata(const gls::image<gls::luma_pixel_16>& rawImage,
         printf("pre_mul[c]: %f, *minmax.second: %f, white_level: %d\n", pre_mul[pre_mul_idx], *minmax.second, white_level);
         (*scale_mul)[c] = (pre_mul[pre_mul_idx] / *minmax.first) * 65535.0 / (white_level - *black_level);
     }
-    printf("scale_mul: %f, %f, %f, %f\n", *scale_mul[0], *scale_mul[1], *scale_mul[2], *scale_mul[3]);
+    printf("scale_mul: %f, %f, %f, %f\n", (*scale_mul)[0], (*scale_mul)[1], (*scale_mul)[2], (*scale_mul)[3]);
 }
 
 gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,

@@ -38,6 +38,15 @@ struct point {
     point(int _x, int _y) : x(_x), y(_y) {}
 };
 
+struct rectangle {
+    int x;
+    int y;
+    int width;
+    int height;
+
+    rectangle(int _x, int _y, int _width, int _height) : x(_x), y(_y), width(_width), height(_height) {}
+};
+
 template <typename T>
 struct basic_luma_pixel {
     constexpr static int channels = 1;

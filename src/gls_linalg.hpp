@@ -432,6 +432,39 @@ inline Matrix<N, N> inverse(const Matrix<N, N>& m) {
     return inverse;
 }
 
+// From DCRaw (https://www.dechifro.org/dcraw/)
+template <int size>
+gls::Matrix<size, 3> pseudoinverse(const gls::Matrix<size, 3>& in) {
+    gls::Matrix<3,6> work;
+
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 6; j++) {
+            work[i][j] = j == i + 3;
+        }
+        for (int j = 0; j < 3; j++) {
+            for (int k = 0; k < size; k++) work[i][j] += in[k][i] * in[k][j];
+        }
+    }
+    for (int i = 0; i < 3; i++) {
+        float num = work[i][i];
+        for (int j = 0; j < 6; j++) work[i][j] /= num;
+        for (int k = 0; k < 3; k++) {
+            if (k == i) continue;
+            num = work[k][i];
+            for (int j = 0; j < 6; j++) work[k][j] -= work[i][j] * num;
+        }
+    }
+    gls::Matrix<size, 3> out;
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < 3; j++) {
+            for (int k = 0; k < 3; k++) {
+                out[i][j] += work[j][k + 3] * in[i][k];
+            }
+        }
+    }
+    return out;
+}
+
 // --- Utility Functions ---
 
 template <int N>
