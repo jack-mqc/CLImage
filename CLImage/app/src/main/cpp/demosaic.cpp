@@ -282,11 +282,9 @@ gls::rectangle alignToQuad(const gls::rectangle& rect) {
     return alignedRect;
 }
 
-const constexpr int GmbSamplesCount = 24;
-
-void colorcheck(const gls::image<gls::luma_pixel_16>& rawImage, BayerPattern bayerPattern, uint32_t black, gls::rectangle gmb_samples[GmbSamplesCount]) {
+void colorcheck(const gls::image<gls::luma_pixel_16>& rawImage, BayerPattern bayerPattern, uint32_t black, std::array<gls::rectangle, 24> gmb_samples) {
 // ColorChecker Chart under 6500-kelvin illumination
-  static gls::Matrix<GmbSamplesCount, 3> gmb_xyY = {
+  static gls::Matrix<gmb_samples.size(), 3> gmb_xyY = {
     { 0.400, 0.350, 10.1 },        // Dark Skin
     { 0.377, 0.345, 35.8 },        // Light Skin
     { 0.247, 0.251, 19.3 },        // Blue Sky
@@ -316,16 +314,12 @@ void colorcheck(const gls::image<gls::luma_pixel_16>& rawImage, BayerPattern bay
 
     gls::image<gls::luma_pixel_16>* writeRawImage = (gls::image<gls::luma_pixel_16>*) &rawImage;
 
-    gls::Matrix<GmbSamplesCount, 4> gmb_cam;
-    gls::Matrix<GmbSamplesCount, 3> gmb_xyz;
+    gls::Matrix<gmb_samples.size(), 4> gmb_cam;
+    gls::Matrix<gmb_samples.size(), 3> gmb_xyz;
 
     std::array<int, 3> count;
-
-    for (int sq = 0; sq < GmbSamplesCount; sq++) {
-        for (int c = 0; c < 3; c++) {
-            count[c] = 0;
-        }
-
+    for (int sq = 0; sq < gmb_samples.size(); sq++) {
+        count.fill(0);
         auto patch = alignToQuad(gmb_samples[sq]);
         for (int y = patch.y; y < patch.y + patch.height; y += 2) {
             for (int x = patch.x; x < patch.x + patch.width; x += 2) {
@@ -348,14 +342,14 @@ void colorcheck(const gls::image<gls::luma_pixel_16>& rawImage, BayerPattern bay
         gmb_xyz[sq][2] = gmb_xyY[sq][2] * (1 - gmb_xyY[sq][0] - gmb_xyY[sq][1]) / gmb_xyY[sq][1];
     }
 
-    gls::Matrix<GmbSamplesCount, 3> inverse = pseudoinverse(gmb_xyz);
+    gls::Matrix<gmb_samples.size(), 3> inverse = pseudoinverse(gmb_xyz);
 
     gls::Matrix<3, 3> cam_xyz;
     for (int pass=0; pass < 2; pass++) {
         for (int i = 0; i < 3 /* colors */; i++) {
             for (int j = 0; j < 3; j++) {
                 cam_xyz[i][j] = 0;
-                for (int k = 0; k < GmbSamplesCount; k++)
+                for (int k = 0; k < gmb_samples.size(); k++)
                     cam_xyz[i][j] += gmb_cam[k][i] * inverse[k][j];
             }
         }
@@ -367,7 +361,7 @@ void colorcheck(const gls::image<gls::luma_pixel_16>& rawImage, BayerPattern bay
         for (int c = 0; c < 4; c++) {
             balance[c] = pre_mul[c == 3 ? 1 : c] * gmb_cam[20][c];
         }
-        for (int sq = 0; sq < GmbSamplesCount; sq++) {
+        for (int sq = 0; sq < gmb_samples.size(); sq++) {
             for (int c = 0; c < 4; c++) {
                 gmb_cam[sq][c] *= balance[c];
             }
@@ -386,72 +380,105 @@ void colorcheck(const gls::image<gls::luma_pixel_16>& rawImage, BayerPattern bay
 void white_balance(const gls::image<gls::luma_pixel_16>& rawImage, gls::Vector<3>* wb_mul, uint32_t white, uint32_t black, BayerPattern bayerPattern) {
     const auto offsets = bayerOffsets[bayerPattern];
 
-    double dsum[8];
-    memset (dsum, 0, sizeof dsum);
+    std::array<float, 8> fsum;
+    std::array<int, 8> sum;
     for (int y = 0; y < rawImage.height/2; y += 8) {
         for (int x = 0; x < rawImage.width/2; x += 8) {
-            int sum[8];
-            memset (sum, 0, sizeof sum);
-            for (int j = 0; j < 8 && y + j < rawImage.height/2; j++) {
-                for (int i = 0; i < 8 && x + i < rawImage.width/2; i++) {
+            sum.fill(0);
+            for (int j = y; j < 8 && j < rawImage.height/2; j++) {
+                for (int i = x; i < 8 && i < rawImage.width/2; i++) {
                     for (int c = 0; c < 4; c++) {
                         const auto& o = offsets[c];
-                        int val = rawImage[2 * (y + j) + o.y][2 * (x + i) + o.x];
+                        int val = rawImage[2 * j + o.y][2 * i + o.x];
                         if (val > white - 25) {
                             goto skip_block;
                         }
-                        if ((val -= black) < 0)
+                        if ((val -= black) < 0) {
                             val = 0;
+                        }
                         sum[c] += val;
                         sum[c+4]++;
                     }
                 }
             }
             for (int i = 0; i < 8; i++) {
-                dsum[i] += sum[i];
+                fsum[i] += sum[i];
             }
             skip_block:
             ;
         }
     }
-    dsum[1] += dsum[3];
-    dsum[5] += dsum[7];
+    // Aggregate green2 data to green
+    fsum[1] += fsum[3];
+    fsum[5] += fsum[7];
 
     for (int c = 0; c < 3; c++) {
-        if (dsum[c] != 0) {
-            (*wb_mul)[c] = dsum[c+4] / dsum[c];
+        if (fsum[c] != 0) {
+            (*wb_mul)[c] = fsum[c+4] / fsum[c];
         }
     }
+    // Normalize with green = 1
+    *wb_mul = *wb_mul / (*wb_mul)[1];
 }
 
 // Coordinates of the GretagMacbeth ColorChecker squares
 // x, y, width, height from 2022-04-07-17-21-33-023.png
-static gls::rectangle gmb_samples[GmbSamplesCount] = {
-    { 4729, 3390, 80, 80 },
-    { 4597, 3385, 66, 81 },
-    { 4459, 3380, 71, 74 },
-    { 4317, 3373, 70, 71 },
-    { 4172, 3366, 86, 78 },
-    { 4032, 3357, 86, 76 },
-    { 4742, 3256, 70, 71 },
-    { 4599, 3251, 81, 74 },
-    { 4462, 3244, 75, 73 },
-    { 4321, 3230, 75, 83 },
-    { 4184, 3223, 71, 78 },
-    { 4040, 3218, 80, 74 },
-    { 4751, 3118, 70, 73 },
-    { 4609, 3113, 72, 69 },
-    { 4469, 3106, 72, 72 },
-    { 4330, 3098, 75, 73 },
-    { 4189, 3097, 79, 62 },
-    { 4054, 3091, 69, 63 },
-    { 4757, 2979, 71, 74 },
-    { 4616, 2975, 65, 73 },
-    { 4475, 2965, 75, 74 },
-    { 4341, 2959, 67, 73 },
-    { 4200, 2952, 71, 72 },
-    { 4061, 2942, 72, 74 },
-};
+//static std::array<gls::rectangle, 24> gmb_samples = {{
+//    { 4729, 3390, 80, 80 },
+//    { 4597, 3385, 66, 81 },
+//    { 4459, 3380, 71, 74 },
+//    { 4317, 3373, 70, 71 },
+//    { 4172, 3366, 86, 78 },
+//    { 4032, 3357, 86, 76 },
+//    { 4742, 3256, 70, 71 },
+//    { 4599, 3251, 81, 74 },
+//    { 4462, 3244, 75, 73 },
+//    { 4321, 3230, 75, 83 },
+//    { 4184, 3223, 71, 78 },
+//    { 4040, 3218, 80, 74 },
+//    { 4751, 3118, 70, 73 },
+//    { 4609, 3113, 72, 69 },
+//    { 4469, 3106, 72, 72 },
+//    { 4330, 3098, 75, 73 },
+//    { 4189, 3097, 79, 62 },
+//    { 4054, 3091, 69, 63 },
+//    { 4757, 2979, 71, 74 },
+//    { 4616, 2975, 65, 73 },
+//    { 4475, 2965, 75, 74 },
+//    { 4341, 2959, 67, 73 },
+//    { 4200, 2952, 71, 72 },
+//    { 4061, 2942, 72, 74 },
+//}};
+
+// Coordinates of the GretagMacbeth ColorChecker squares
+// x, y, width, height from 2022-04-12-10-43-56-566.dng
+static std::array<gls::rectangle, 24> gmb_samples = {{
+    { 4886, 2882, 285, 273 },
+    { 4505, 2899, 272, 235 },
+    { 4122, 2892, 262, 240 },
+    { 3742, 2900, 256, 225 },
+    { 3352, 2897, 258, 227 },
+    { 2946, 2904, 282, 231 },
+    { 4900, 2526, 274, 244 },
+    { 4513, 2526, 262, 237 },
+    { 4133, 2529, 235, 227 },
+    { 3733, 2523, 254, 237 },
+    { 3347, 2530, 245, 234 },
+    { 2932, 2531, 283, 233 },
+    { 4899, 2151, 283, 252 },
+    { 4519, 2155, 261, 245 },
+    { 4119, 2157, 269, 245 },
+    { 3737, 2160, 246, 226 },
+    { 3335, 2168, 261, 239 },
+    { 2957, 2183, 233, 214 },
+    { 4923, 1784, 265, 243 },
+    { 4531, 1801, 250, 219 },
+    { 4137, 1792, 234, 226 },
+    { 3729, 1790, 254, 230 },
+    { 3337, 1793, 250, 232 },
+    { 2917, 1800, 265, 228 },
+}};
+
 
 void unpackRawMetadata(const gls::image<gls::luma_pixel_16>& rawImage,
                        gls::tiff_metadata* metadata,
@@ -502,6 +529,13 @@ void unpackRawMetadata(const gls::image<gls::luma_pixel_16>& rawImage,
 
     if (auto_white_balance) {
         white_balance(rawImage, &cam_mul, white_level, *black_level, *bayerPattern);
+
+        printf("Auto White Balance: %f, %f, %f\n", cam_mul[0], cam_mul[1], cam_mul[2]);
+
+        // Convert cam_mul from camera to XYZ
+        const auto cam_mul_xyz = cam_xyz * cam_mul;
+        std::cout << "cam_mul_xyz: " << cam_mul_xyz << ", CCT: " << XYZtoCorColorTemp(cam_mul_xyz) << std::endl;
+
         for (int c = 0; c < 3; c++) {
             as_shot_neutral[c] = 1 / cam_mul[c];
         }
@@ -527,8 +561,8 @@ void unpackRawMetadata(const gls::image<gls::luma_pixel_16>& rawImage,
         std::cout << "sRGB White -> XYZ D65: " << xyz_rgb * gls::Vector({1, 1, 1}) << std::endl;
         std::cout << "inverse(cam_xyz) * (1 / pre_mul): " << inverse(cam_xyz) * (1 / pre_mul) << std::endl;
 
-        auto cam_white = cam_xyz * xyz_rgb * gls::Vector<3>({ 1, 1, 1 });
-        std::cout << "inverse(cam_xyz) * cam_white: " << inverse(cam_xyz) * cam_white << ", CCT: " << XYZtoCorColorTemp(inverse(cam_xyz) * cam_white) << std::endl;
+        auto cam_white = inverse(cam_xyz) * xyz_rgb * gls::Vector<3>({ 1, 1, 1 });
+        std::cout << "inverse(cam_xyz) * cam_white: " << cam_xyz * cam_white << ", CCT: " << XYZtoCorColorTemp(cam_xyz * cam_white) << std::endl;
         std::cout << "xyz_rgb * gls::Vector<3>({ 1, 1, 1 }): " << xyz_rgb * gls::Vector<3>({ 1, 1, 1 }) << ", CCT: " << XYZtoCorColorTemp(xyz_rgb * gls::Vector<3>({ 1, 1, 1 })) << std::endl;
 
         const auto wb_out = xyz_rgb * *rgb_cam * mCamMul * gls::Vector({1, 1, 1});
@@ -756,11 +790,11 @@ gls::image<gls::rgba_pixel>::unique_ptr demosaicImageGPU(const gls::image<gls::l
 
     interpolateRedBlue(&glsContext, clScaledRawImage, clGreenImage, &clLinearRGBImage, bayerPattern);
 
-    gls::cl_image_2d<gls::rgba_pixel_16> clDenoisedRGBImage(clContext, rawImage.width, rawImage.height);
-    denoiseImage(&glsContext, clLinearRGBImage, &clDenoisedRGBImage);
+//    gls::cl_image_2d<gls::rgba_pixel_16> clDenoisedRGBImage(clContext, rawImage.width, rawImage.height);
+//    denoiseImage(&glsContext, clLinearRGBImage, &clDenoisedRGBImage);
 
     gls::cl_image_2d<gls::rgba_pixel> clsRGBImage(clContext, rawImage.width, rawImage.height);
-    convertTosRGB(&glsContext, clDenoisedRGBImage, &clsRGBImage, rgb_cam);
+    convertTosRGB(&glsContext, clLinearRGBImage, &clsRGBImage, rgb_cam);
 
     auto rgbaImage = clsRGBImage.toImage();
 

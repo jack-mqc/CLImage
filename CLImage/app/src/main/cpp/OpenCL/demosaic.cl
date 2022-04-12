@@ -71,6 +71,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         float g_ave = (g_left + g_right + g_up + g_down) / 4;
 
         float2 dv = (float2) (fabs(g_left - g_right), fabs(g_up - g_down));
+        dv += (float2) (fabs(c_left + c_right - 2 * c_xy) / 2, fabs(c_up + c_down - 2 * c_xy) / 2);
 
         // If the gradient estimation at this location is too weak, try it on a 3x3 patch
         if (length(dv) < 0.1) {
@@ -94,9 +95,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         // Estimate the whiteness of the pixel value and use that to weight the amount of HF correction
         float cMax = fmax(c_xy, fmax(g_ave, c2_ave));
         float cMin = fmin(c_xy, fmin(g_ave, c2_ave));
-        float L = (cMax + cMin) / 2;
-        float S = L == 1 ? 0 : (cMax - cMin) / (1 - fabs(2 * L - 1));
-        float whiteness = smoothstep(0.4, 0.6, 1 - S);
+        float whiteness = smoothstep(0.25, 0.35, cMin/cMax);
 
         float sample_h = (g_left + g_right) / 2 + whiteness * (c_xy - (c_left + c_right) / 2) / 4;
         float sample_v = (g_up + g_down) / 2 + whiteness * (c_xy - (c_up + c_down) / 2) / 4;
@@ -236,9 +235,9 @@ float3 yCbCrtoRGB(float3 inputValue) {
 }
 
 float3 denoiseLumaChroma(float3 inputValue, image2d_t inputImage, int2 imageCoordinates) {
-    float3 blurred_pixel = 0;
+    float3 filtered_pixel = 0;
     float3 kernel_norm = 0;
-    const int filterSize = 5;
+    const int filterSize = 15;
     const float lumaSigmaR = 0.0005f;
     const float chromaSigmaR = 0.005f;
 
@@ -254,11 +253,11 @@ float3 denoiseLumaChroma(float3 inputValue, image2d_t inputImage, int2 imageCoor
 
             float3 sampleWeight = (float3) (lumaWeight, chromaWeight, chromaWeight);
 
-            blurred_pixel += sampleWeight * inputSampleYCC;
+            filtered_pixel += sampleWeight * inputSampleYCC;
             kernel_norm += sampleWeight;
         }
     }
-    return yCbCrtoRGB(blurred_pixel / kernel_norm);
+    return yCbCrtoRGB(filtered_pixel / kernel_norm);
 }
 
 kernel void denoseImage(read_only image2d_t inputImage, write_only image2d_t denoisedImage) {
@@ -301,7 +300,7 @@ float3 gaussianBlur(image2d_t inputImage, int2 imageCoordinates) {
     // Compute a blurred version of the image
     float3 blurred_pixel = 0;
     float3 kernel_norm = 0;
-    const int filterSize = 5;
+    const int filterSize = 10;
     const float sigmaS = (float) filterSize / 3.0f;
     for (int y = -filterSize / 2; y <= filterSize / 2; y++) {
         for (int x = -filterSize / 2; x <= filterSize / 2; x++) {
@@ -317,7 +316,7 @@ float3 sharpen(float3 pixel_value, image2d_t inputImage, int2 imageCoordinates) 
     float3 dx = read_imagef(inputImage, imageCoordinates + (int2)(1, 0)).xyz - pixel_value;
     float3 dy = read_imagef(inputImage, imageCoordinates + (int2)(0, 1)).xyz - pixel_value;
 
-    const float amount = 1.25;
+    const float amount = 1.5;
 
     // Smart sharpening
     float3 sharpening = amount * smoothstep(0.0f, 0.03f, length(dx) + length(dy))       // Gradient magnitude thresholding
@@ -336,11 +335,11 @@ kernel void convertTosRGB(read_only image2d_t linearImage, write_only image2d_t 
     float3 linear = read_imagef(linearImage, imageCoordinates).xyz;
 
     // Made this a separate pipeline step...
-    // linear = denoiseLumaChroma(linear, linearImage, imageCoordinates);
+    linear = denoiseLumaChroma(linear, linearImage, imageCoordinates);
 
     linear = sharpen(linear, linearImage, imageCoordinates);
 
-    linear = contrastBoost(linear, 1.025);
+    linear = contrastBoost(linear, 1.2);
 
     float3 rgb = (float3) (dot(transform[0], linear), dot(transform[1], linear), dot(transform[2], linear));
 

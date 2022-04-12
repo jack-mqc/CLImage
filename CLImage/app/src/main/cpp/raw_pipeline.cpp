@@ -33,12 +33,14 @@ inline uint8_t clamp8(int x) { return x < 0 ? 0 : x > 0xff ? 0xff : x; }
 
 // IMX492 M43-ish Sony Sensor
 void IMX492Metadata(gls::tiff_metadata *metadata) {
-    metadata->insert({ TIFFTAG_COLORMATRIX1, std::vector<float>{ 1.0475, -0.3850, -0.0955, -0.0902, 0.9891, 0.1012 , -0.0011, 0.1587, 0.3547 } });
+    metadata->insert({ TIFFTAG_COLORMATRIX1, std::vector<float>{ 1.0781, -0.4173, -0.0976, -0.0633, 0.9661, 0.0972, 0.0073, 0.1349, 0.3481 } });
     metadata->insert({ TIFFTAG_ASSHOTNEUTRAL, std::vector<float>{ 1 / 2.001460, 1, 1 / 1.864002 } });
     metadata->insert({ TIFFTAG_CFAREPEATPATTERNDIM, std::vector<uint16_t>{ 2, 2 } });
     metadata->insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 1, 2, 0, 1 } });
     metadata->insert({ TIFFTAG_BLACKLEVEL, std::vector<float>{ 0 } });
     metadata->insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0xfff } });
+//    metadata->insert({ EXIFTAG_ISOSPEED, std::vector<uint16_t>{ 100 } });
+//    metadata->insert({ EXIFTAG_SHUTTERSPEEDVALUE, 1.0/100.0});
 }
 
 // IMX571 APS-C Sony Sensor
@@ -109,14 +111,20 @@ int main(int argc, const char* argv[]) {
 //        IMX492Metadata(&metadata);
 //        const auto inputImage = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
 
+//        for (auto& p : inputImage->pixels()) {
+//            p = gls::luma_pixel_16 {
+//                (uint16_t) (p[0] >> 4)
+//            };
+//        }
+
         LOG_INFO(TAG) << "read inputImage of size: " << inputImage->width << " x " << inputImage->height << std::endl;
 
         const bool useGPU = true;
         if (useGPU) {
-            const auto rgb_image = demosaicImageGPU(*inputImage, &metadata, true);
+            const auto rgb_image = demosaicImageGPU(*inputImage, &metadata, /*auto_white_balance=*/ true);
             rgb_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_rgb.png", /*skip_alpha=*/ true);
         } else {
-            const auto rgb_image = demosaicImage(*inputImage, &metadata, true);
+            const auto rgb_image = demosaicImage(*inputImage, &metadata, /*auto_white_balance=*/ true);
             auto output_image = applyToneCurve(*rgb_image);
             LOG_INFO(TAG) << "...done with demosaicing (CPU)." << std::endl;
             output_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_rgb.png");
