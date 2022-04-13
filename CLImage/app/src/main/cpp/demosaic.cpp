@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <limits.h>
-#include <math.h>
+#include <climits>
+#include <cmath>
 
 #include "demosaic.hpp"
 #include "gls_color_science.hpp"
@@ -312,21 +312,20 @@ void colorcheck(const gls::image<gls::luma_pixel_16>& rawImage, BayerPattern bay
 
     const auto offsets = bayerOffsets[bayerPattern];
 
-    gls::image<gls::luma_pixel_16>* writeRawImage = (gls::image<gls::luma_pixel_16>*) &rawImage;
+    auto* writeRawImage = (gls::image<gls::luma_pixel_16>*) &rawImage;
 
     gls::Matrix<gmb_samples.size(), 4> gmb_cam;
     gls::Matrix<gmb_samples.size(), 3> gmb_xyz;
 
-    std::array<int, 3> count;
     for (int sq = 0; sq < gmb_samples.size(); sq++) {
-        count.fill(0);
+        std::array<int, 3> count { /* zero */ };
         auto patch = alignToQuad(gmb_samples[sq]);
         for (int y = patch.y; y < patch.y + patch.height; y += 2) {
             for (int x = patch.x; x < patch.x + patch.width; x += 2) {
                 for (int c = 0; c < 4; c++) {
                     const auto& o = offsets[c];
                     int val = rawImage[y + o.y][x + o.x];
-                    gmb_cam[sq][c == 3 ? 1 : c] += val;
+                    gmb_cam[sq][c == 3 ? 1 : c] += (float) val;
                     count[c == 3 ? 1 : c]++;
                     // Mark image to identify sampled areas
                     (*writeRawImage)[y + o.y][x + o.x] = black + (val - black) / 2;
@@ -335,7 +334,7 @@ void colorcheck(const gls::image<gls::luma_pixel_16>& rawImage, BayerPattern bay
         }
 
         for (int c = 0; c < 3; c++) {
-            gmb_cam[sq][c] = gmb_cam[sq][c] / count[c] - black;
+            gmb_cam[sq][c] = gmb_cam[sq][c] / (float) count[c] - (float) black;
         }
         gmb_xyz[sq][0] = gmb_xyY[sq][2] * gmb_xyY[sq][0] / gmb_xyY[sq][1];
         gmb_xyz[sq][1] = gmb_xyY[sq][2];
@@ -380,16 +379,15 @@ void colorcheck(const gls::image<gls::luma_pixel_16>& rawImage, BayerPattern bay
 void white_balance(const gls::image<gls::luma_pixel_16>& rawImage, gls::Vector<3>* wb_mul, uint32_t white, uint32_t black, BayerPattern bayerPattern) {
     const auto offsets = bayerOffsets[bayerPattern];
 
-    std::array<float, 8> fsum;
-    std::array<int, 8> sum;
+    std::array<float, 8> fsum { /* zero */ };
     for (int y = 0; y < rawImage.height/2; y += 8) {
         for (int x = 0; x < rawImage.width/2; x += 8) {
-            sum.fill(0);
+            std::array<uint32_t, 8> sum { /* zero */ };
             for (int j = y; j < 8 && j < rawImage.height/2; j++) {
                 for (int i = x; i < 8 && i < rawImage.width/2; i++) {
                     for (int c = 0; c < 4; c++) {
                         const auto& o = offsets[c];
-                        int val = rawImage[2 * j + o.y][2 * i + o.x];
+                        uint32_t val = rawImage[2 * j + o.y][2 * i + o.x];
                         if (val > white - 25) {
                             goto skip_block;
                         }
@@ -402,7 +400,7 @@ void white_balance(const gls::image<gls::luma_pixel_16>& rawImage, gls::Vector<3
                 }
             }
             for (int i = 0; i < 8; i++) {
-                fsum[i] += sum[i];
+                fsum[i] += (float) sum[i];
             }
             skip_block:
             ;
