@@ -88,7 +88,7 @@ android {
 }
 
 tasks.register('compileShaders') {
-    inputs.files(fileTree('app/src/main/OpenCL/*.cl'))
+    inputs.files('app/src/main/OpenCL/*.cl')
             .withPropertyName('sourceFiles')
             .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.dir(layout.buildDirectory.dir('OpenCLBinaries'))  // app/build/OpenCLBinaries
@@ -105,17 +105,16 @@ tasks.register('compileShaders') {
 
 project.afterEvaluate {
     // Only generate compiled shaders for the Release build
-    if (tasks.findByName("externalNativeBuildArm8Release")) {
-        externalNativeBuildArm8Release.finalizedBy compileShaders
+    if (tasks.findByName("mergeArm8ReleaseAssets")) {
+        mergeArm8ReleaseAssets.dependsOn compileShaders
     }
 }
 
 dependencies {
-
     implementation 'androidx.core:core-ktx:1.7.0'
-    implementation 'androidx.appcompat:appcompat:1.4.0'
-    implementation 'com.google.android.material:material:1.4.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.2'
+    implementation 'androidx.appcompat:appcompat:1.4.1'
+    implementation 'com.google.android.material:material:1.5.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.3'
     // testImplementation 'junit:junit:'
     androidTestImplementation 'androidx.test.ext:junit:1.1.3'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
