@@ -154,9 +154,9 @@ void OpenCLContext::handleProgramException(const cl::BuildError& e) {
 }
 
 #ifdef __APPLE__
-static const char* cl_options = "-cl-std=CL1.2 -Werror -cl-fast-relaxed-math";
+static const char* cl_options = "-cl-std=CL1.2 -Werror -cl-fast-relaxed-math -cl-single-precision-constant";
 #else
-static const char* cl_options = "-cl-std=CL2.0 -Werror -cl-fast-relaxed-math";
+static const char* cl_options = "-cl-std=CL2.0 -Werror -cl-fast-relaxed-math -cl-single-precision-constant";
 #endif
 
 cl::Program OpenCLContext::loadProgram(const std::string& programName, const std::string& shadersRootPath) {

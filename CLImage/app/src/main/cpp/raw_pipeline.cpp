@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <string>
 #include <cmath>
+#include <chrono>
 
 #include "gls_logging.h"
 #include "gls_image.hpp"
@@ -119,14 +120,26 @@ int main(int argc, const char* argv[]) {
 
         LOG_INFO(TAG) << "read inputImage of size: " << inputImage->width << " x " << inputImage->height << std::endl;
 
+        auto t_start = std::chrono::high_resolution_clock::now();
+
         const bool useGPU = true;
         if (useGPU) {
             const auto rgb_image = demosaicImageGPU(*inputImage, &metadata, /*auto_white_balance=*/ true);
+
+            auto t_end = std::chrono::high_resolution_clock::now();
+            double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
+
+            LOG_INFO(TAG) << "GPU Pipeline Execution Time: " << elapsed_time_ms << std::endl;
             rgb_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_rgb.png", /*skip_alpha=*/ true);
         } else {
             const auto rgb_image = demosaicImage(*inputImage, &metadata, /*auto_white_balance=*/ true);
             auto output_image = applyToneCurve(*rgb_image);
             LOG_INFO(TAG) << "...done with demosaicing (CPU)." << std::endl;
+
+            auto t_end = std::chrono::high_resolution_clock::now();
+            double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
+
+            LOG_INFO(TAG) << "CPU Pipeline Execution Time: " << elapsed_time_ms << std::endl;
             output_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_rgb.png");
         }
 

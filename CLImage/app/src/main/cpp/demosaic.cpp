@@ -15,6 +15,7 @@
 
 #include <climits>
 #include <cmath>
+#include <sys/types.h>
 
 #include "demosaic.hpp"
 #include "gls_color_science.hpp"
@@ -624,7 +625,7 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImage(const gls::image<gls::lu
 
 int scaleRawData(gls::OpenCLContext* glsContext,
                  const gls::cl_image_2d<gls::luma_pixel_16>& rawImage,
-                 gls::cl_image_2d<gls::luma_pixel_16>* scaledRawImage,
+                 gls::cl_image_2d<gls::luma_pixel_float>* scaledRawImage,
                  BayerPattern bayerPattern, gls::Vector<4> scaleMul, float blackLevel) {
     try {
         // Load the shader source
@@ -652,8 +653,8 @@ int scaleRawData(gls::OpenCLContext* glsContext,
 }
 
 int interpolateGreen(gls::OpenCLContext* glsContext,
-                     const gls::cl_image_2d<gls::luma_pixel_16>& rawImage,
-                     gls::cl_image_2d<gls::luma_pixel_16>* greenImage,
+                     const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+                     gls::cl_image_2d<gls::luma_pixel_float>* greenImage,
                      BayerPattern bayerPattern) {
     try {
         // Load the shader source
@@ -677,9 +678,9 @@ int interpolateGreen(gls::OpenCLContext* glsContext,
 }
 
 int interpolateRedBlue(gls::OpenCLContext* glsContext,
-                       const gls::cl_image_2d<gls::luma_pixel_16>& rawImage,
-                       const gls::cl_image_2d<gls::luma_pixel_16>& greenImage,
-                       gls::cl_image_2d<gls::rgba_pixel_16>* rgbImage,
+                       const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+                       const gls::cl_image_2d<gls::luma_pixel_float>& greenImage,
+                       gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
                        BayerPattern bayerPattern) {
     try {
         // Load the shader source
@@ -703,21 +704,21 @@ int interpolateRedBlue(gls::OpenCLContext* glsContext,
     }
 }
 
-int denoiseImage(gls::OpenCLContext* glsContext,
-                 const gls::cl_image_2d<gls::rgba_pixel_16>& inputImage,
-                 gls::cl_image_2d<gls::rgba_pixel_16>* denoisedImage) {
+int applyKernel(gls::OpenCLContext* glsContext, const std::string& filterName,
+                const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) {
     try {
         // Load the shader source
-        const auto demosaicProgram = glsContext->loadProgram("demosaic");
+        const auto program = glsContext->loadProgram("demosaic");
 
         // Bind the kernel parameters
         auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
-                                        cl::Image2D   // denoisedImage
-                                        >(demosaicProgram, "denoseImage");
+                                        cl::Image2D   // outputImage
+                                        >(program, filterName);
 
         // Schedule the kernel on the GPU
-        kernel(gls::OpenCLContext::buildEnqueueArgs(denoisedImage->width, denoisedImage->height),
-               inputImage.getImage2D(), denoisedImage->getImage2D());
+        kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
+               inputImage.getImage2D(), outputImage->getImage2D());
         return 0;
     } catch (cl::Error& err) {
         LOG_ERROR(TAG) << "Caught Exception: " << std::string(err.what()) << " - " << gls::clStatusToString(err.err())
@@ -727,7 +728,7 @@ int denoiseImage(gls::OpenCLContext* glsContext,
 }
 
 int convertTosRGB(gls::OpenCLContext* glsContext,
-                  const gls::cl_image_2d<gls::rgba_pixel_16>& linearImage,
+                  const gls::cl_image_2d<gls::rgba_pixel_float>& linearImage,
                   gls::cl_image_2d<gls::rgba_pixel>* rgbImage,
                   const gls::Matrix<3, 3>& transform) {
     try {
@@ -776,23 +777,32 @@ gls::image<gls::rgba_pixel>::unique_ptr demosaicImageGPU(const gls::image<gls::l
     LOG_INFO(TAG) << "Begin demosaicing image (GPU)..." << std::endl;
 
     gls::cl_image_2d<gls::luma_pixel_16> clRawImage(clContext, rawImage);
-    gls::cl_image_2d<gls::luma_pixel_16> clScaledRawImage(clContext, rawImage.width, rawImage.height);
+    gls::cl_image_2d<gls::luma_pixel_float> clScaledRawImage(clContext, rawImage.width, rawImage.height);
 
     scaleRawData(&glsContext, clRawImage, &clScaledRawImage, bayerPattern, scale_mul, black_level / 0xffff);
 
-    gls::cl_image_2d<gls::luma_pixel_16> clGreenImage(clContext, rawImage.width, rawImage.height);
+    gls::cl_image_2d<gls::luma_pixel_float> clGreenImage(clContext, rawImage.width, rawImage.height);
 
     interpolateGreen(&glsContext, clScaledRawImage, &clGreenImage, bayerPattern);
 
-    gls::cl_image_2d<gls::rgba_pixel_16> clLinearRGBImage(clContext, rawImage.width, rawImage.height);
+    gls::cl_image_2d<gls::rgba_pixel_float> clLinearRGBImage(clContext, rawImage.width, rawImage.height);
 
     interpolateRedBlue(&glsContext, clScaledRawImage, clGreenImage, &clLinearRGBImage, bayerPattern);
 
-//    gls::cl_image_2d<gls::rgba_pixel_16> clDenoisedRGBImage(clContext, rawImage.width, rawImage.height);
-//    denoiseImage(&glsContext, clLinearRGBImage, &clDenoisedRGBImage);
+    applyKernel(&glsContext, "rgbToYCbCrImage", clLinearRGBImage, &clLinearRGBImage);
+
+    gls::cl_image_2d<gls::rgba_pixel_float> clDenoisedRGBImage(clContext, rawImage.width, rawImage.height);
+    applyKernel(&glsContext, "denoiseImage", clLinearRGBImage, &clDenoisedRGBImage);
+
+    // applyKernel(&glsContext, "sharpenLumaImage", clDenoisedRGBImage, &clLinearRGBImage);
+
+    applyKernel(&glsContext, "yCbCrtoRGBImage", clDenoisedRGBImage, &clDenoisedRGBImage);
+
+//    gls::cl_image_2d<gls::rgba_pixel_16> clSharpenedRGBImage(clContext, rawImage.width, rawImage.height);
+//    sharpenImage(&glsContext, clDenoisedRGBImage, &clSharpenedRGBImage);
 
     gls::cl_image_2d<gls::rgba_pixel> clsRGBImage(clContext, rawImage.width, rawImage.height);
-    convertTosRGB(&glsContext, clLinearRGBImage, &clsRGBImage, rgb_cam);
+    convertTosRGB(&glsContext, clDenoisedRGBImage, &clsRGBImage, rgb_cam);
 
     auto rgbaImage = clsRGBImage.toImage();
 
