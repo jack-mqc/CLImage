@@ -56,14 +56,14 @@ OpenCLContext::OpenCLContext(const std::string& shadersRootPath) : _shadersRootP
 
 #elif __ANDROID__
 
-OpenCLContext::OpenCLContext(const std::string& shadersRootPath) : _shadersRootPath(shadersRootPath) {
+OpenCLContext::OpenCLContext(const std::string& shadersRootPath, bool quiet) : _shadersRootPath(shadersRootPath) {
     // Load libOpenCL
     CL_WRAPPER_NS::bindOpenCLLibrary();
 
     std::vector<cl::Platform> platforms;
     cl::Platform::get(&platforms);
     cl::Platform platform;
-    for (auto& p : platforms) {
+    for (auto &p : platforms) {
         std::string version = p.getInfo<CL_PLATFORM_VERSION>();
         if (version.find("OpenCL 2.") != std::string::npos) {
             platform = p;
@@ -78,17 +78,21 @@ OpenCLContext::OpenCLContext(const std::string& shadersRootPath) : _shadersRootP
         throw cl::Error(-1, "Error setting default platform.");
     }
 
-    cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platform)(), 0};
+    cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties) (platform)(),
+                                          0};
     cl::Context context(CL_DEVICE_TYPE_ALL, properties);
 
     cl::Device d = cl::Device::getDefault();
-    LOG_INFO(TAG) << "- Device: " << d.getInfo<CL_DEVICE_NAME>() << std::endl;
-    LOG_INFO(TAG) << "- Device Version: " << d.getInfo<CL_DEVICE_VERSION>() << std::endl;
-    LOG_INFO(TAG) << "- Driver Version: " << d.getInfo<CL_DRIVER_VERSION>() << std::endl;
-    LOG_INFO(TAG) << "- OpenCL C Version: " << d.getInfo<CL_DEVICE_OPENCL_C_VERSION>() << std::endl;
-    LOG_INFO(TAG) << "- Compute Units: " << d.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
-    LOG_INFO(TAG) << "- CL_DEVICE_MAX_WORK_GROUP_SIZE: " << d.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
-    LOG_INFO(TAG) << "- CL_DEVICE_EXTENSIONS: " << d.getInfo<CL_DEVICE_EXTENSIONS>() << std::endl;
+    if (!quiet) {
+        LOG_INFO(TAG) << "- Device: " << d.getInfo<CL_DEVICE_NAME>() << std::endl;
+        LOG_INFO(TAG) << "- Device Version: " << d.getInfo<CL_DEVICE_VERSION>() << std::endl;
+        LOG_INFO(TAG) << "- Driver Version: " << d.getInfo<CL_DRIVER_VERSION>() << std::endl;
+        LOG_INFO(TAG) << "- OpenCL C Version: " << d.getInfo<CL_DEVICE_OPENCL_C_VERSION>() << std::endl;
+        LOG_INFO(TAG) << "- Compute Units: " << d.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
+        LOG_INFO(TAG) << "- CL_DEVICE_MAX_WORK_GROUP_SIZE: "
+                      << d.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
+        LOG_INFO(TAG) << "- CL_DEVICE_EXTENSIONS: " << d.getInfo<CL_DEVICE_EXTENSIONS>() << std::endl;
+    }
 
     // opencl.hpp relies on a default context
     cl::Context::setDefault(context);
@@ -137,7 +141,6 @@ int OpenCLContext::saveBinaryFile(const std::string& path, const std::vector<uns
     if (file.is_open()) {
         file.write((char*)binary.data(), binary.size());
         file.close();
-        LOG_INFO(TAG) << "Wrote " << binary.size() << " bytes to " << path << std::endl;
         return 0;
     }
     LOG_ERROR(TAG) << "Couldn't open file " << path << std::endl;
@@ -193,7 +196,7 @@ int OpenCLContext::buildProgram(cl::Program& program) {
     try {
         program.build(cl_options);
         for (auto& pair : program.getBuildInfo<CL_PROGRAM_BUILD_LOG>()) {
-            if (!pair.second.empty()) {
+            if (!pair.second.empty() && pair.second != "Pass") {
                 LOG_INFO(TAG) << "OpenCL Build: " << pair.second << std::endl;
             }
         }

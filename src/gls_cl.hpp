@@ -54,7 +54,7 @@ class OpenCLContext {
 #endif
 
    public:
-    OpenCLContext(const std::string& shadersRootPath = "");
+    OpenCLContext(const std::string& shadersRootPath = "", bool quiet = false);
 
     cl::Context clContext() { return _clContext; }
     const std::string& shadersRootPath() { return _shadersRootPath; }

@@ -88,6 +88,9 @@ android {
 }
 
 tasks.register('compileShaders') {
+    if (tasks.findByName("mergeArm8ReleaseAssets")) {
+        dependsOn("externalNativeBuildArm8Release")
+    }
     inputs.files('app/src/main/OpenCL/*.cl')
             .withPropertyName('sourceFiles')
             .withPathSensitivity(PathSensitivity.RELATIVE)

@@ -26,9 +26,8 @@ static const char* TAG = "ShaderCompiler";
 extern "C" int __android_log_print(int prio, const char* tag, const char* fmt, ...) { return 0; }
 
 int main(int argc, const char* argv[]) {
-    std::cout << "OpenCL Shader Compiler." << std::endl;
-
     if (argc > 1 && strcmp(argv[1], "-help") == 0) {
+        std::cout << "OpenCL Shader Compiler." << std::endl;
         std::cout << "Usage: cat shader.cl | " << argv[0] << " outfile" << std::endl;
         return 0;
     }
@@ -41,7 +40,7 @@ int main(int argc, const char* argv[]) {
     }
 
     try {
-        gls::OpenCLContext glsContext;
+        gls::OpenCLContext glsContext(/*shadersRootPath=*/"", /*quiet=*/true);
         auto context = glsContext.clContext();
 
         cl::Program program(buffer.str());
@@ -52,7 +51,7 @@ int main(int argc, const char* argv[]) {
         std::vector<std::vector<unsigned char>> binaries;
         cl_int result = program.getInfo(CL_PROGRAM_BINARIES, &binaries);
         if (result != CL_SUCCESS) {
-            LOG_INFO(TAG) << "CL_PROGRAM_BINARIES returned: " << gls::clStatusToString(result) << std::endl;
+            LOG_ERROR(TAG) << "CL_PROGRAM_BINARIES returned: " << gls::clStatusToString(result) << std::endl;
             return -1;
         }
 

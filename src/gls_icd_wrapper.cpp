@@ -46,9 +46,6 @@ int bindOpenCLLibrary() {
     if (libopencl) {
         bindOpenClAPIEntries(libopencl);
         opencl_loaded = true;
-
-        LOG_INFO(TAG) << "Loaded OpenCL Dynamic Library" << std::endl;
-
         return 0;
     }
 
