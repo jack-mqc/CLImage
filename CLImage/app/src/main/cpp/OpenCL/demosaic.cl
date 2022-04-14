@@ -29,17 +29,55 @@ constant const int2 bayerOffsets[4][4] = {
     { {1, 1}, {1, 0}, {0, 0}, {0, 1} }  // bggr
 };
 
-float3 __attribute__((overloadable)) linstep(float a, float b, float3 x) {
-    float3 t = clamp(x * (1.0 / (b - a)) - (a / (b - a)), 0.0, 1.1);
-    return t * t * (3.0 - 2.0 * t);
-}
+#if defined(__QCOMM_QGPU_A3X__) || \
+    defined(__QCOMM_QGPU_A4X__) || \
+    defined(__QCOMM_QGPU_A5X__) || \
+    defined(__QCOMM_QGPU_A6X__) || \
+    defined(__QCOMM_QGPU_A7V__) || \
+    defined(__QCOMM_QGPU_A7P__)
 
-float __attribute__((overloadable)) linstep(float a, float b, float x) {
-    float t = clamp(x * (1.0 / (b - a)) - (a / (b - a)), 0.0, 1.1);
-    return t * t * (3.0 - 2.0 * t);
-}
+#define _fabs(a) \
+   ({ __typeof__ (a) _a = (a); \
+     _a >= 0 ? _a : - _a; })
 
-// #define linstep smoothstep
+#define _fmax(a, b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+
+#define _fmin(a, b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a < _b ? _a : _b; })
+
+#define _clamp(x, minval, maxval) \
+   ({ __typeof__ (x) _x = (x); \
+      __typeof__ (minval) _minval = (minval); \
+      __typeof__ (maxval) _maxval = (maxval); \
+     _x < _minval ? _minval : _x > _maxval ? _maxval : _x; })
+
+#define _mix(x, y, a) \
+   ({ __typeof__ (x) _x = (x); \
+      __typeof__ (y) _y = (y); \
+      __typeof__ (a) _a = (a); \
+      _x + (_y - _x) * _a; })
+
+// Qualcomm's default implementation of smoothstep can be really slow...
+
+#define _smoothstep(a, b, x) \
+   ({ __typeof__ (a) _a = (a); \
+      __typeof__ (b) _b = (b); \
+      __typeof__ (x) _x = (x), t; \
+      t = _clamp(_x * (1 / (_b - _a)) - (_a / (_b - _a)), 0, 1); t * t * (3 - 2 * t); })
+
+#define fabs _fabs
+#define fmax _fmax
+#define fmin _fmin
+#define clamp _clamp
+#define mix _mix
+#define smoothstep _smoothstep
+
+#endif
 
 // Work on one Quad (2x2) at a time
 kernel void scaleRawData(read_only image2d_t rawImage, write_only image2d_t scaledRawImage,
@@ -107,7 +145,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         // Estimate the whiteness of the pixel value and use that to weight the amount of HF correction
         float cMax = fmax(c_xy, fmax(g_ave, c2_ave));
         float cMin = fmin(c_xy, fmin(g_ave, c2_ave));
-        float whiteness = linstep(0.25, 0.35, cMin/cMax);
+        float whiteness = smoothstep(0.25, 0.35, cMin/cMax);
 
         float sample_h = (g_left + g_right) / 2 + whiteness * (c_xy - (c_left + c_right) / 2) / 4;
         float sample_v = (g_up + g_down) / 2 + whiteness * (c_xy - (c_up + c_down) / 2) / 4;
@@ -115,7 +153,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
 
         // TODO: replace eps with some multiple of sigma from the noise model
         float eps = 0.01;
-        float flatness = 1 - linstep(eps / 2, eps, fabs(dv.x - dv.y));
+        float flatness = 1 - smoothstep(eps / 2.0, eps, fabs(dv.x - dv.y));
         float sample = mix(dv.x > dv.y ? sample_v : sample_h, sample_flat, flatness);
 
         write_imagef(greenImage, imageCoordinates, clamp(sample, 0.0, 1.0));
@@ -314,13 +352,13 @@ float3 toneCurve(float3 x) {
 float3 saturationBoost(float3 value, float saturation) {
     // Saturation boost with highlight protection
     const float luma = 0.2126 * value.x + 0.7152 * value.y + 0.0722 * value.z; // BT.709-2 (sRGB) luma primaries
-    const float3 clipping = linstep(0.75, 2.0, value);
+    const float3 clipping = smoothstep(0.75, 2.0, value);
     return mix(luma, value, mix(saturation, 1.0, clipping));
 }
 
 float3 contrastBoost(float3 value, float contrast) {
     const float gray = 0.2;
-    const float3 clipping = linstep(0.9, 2.0, value);
+    const float3 clipping = smoothstep(0.9, 2.0, value);
     return mix(gray, value, mix(contrast, 1.0, clipping));
 }
 
@@ -363,9 +401,9 @@ float3 sharpen(float3 pixel_value, image2d_t inputImage, int2 imageCoordinates) 
     const float amount = 1.5;
 
     // Smart sharpening
-    float3 sharpening = amount * linstep(0.0, 0.03, length(dx) + length(dy))       // Gradient magnitude thresholding
-                               * (1.0 - linstep(0.95, 1.0, pixel_value))          // Highlight ringing protection
-                               * (0.6 + 0.4 * linstep(0.0, 0.1, pixel_value));   // Shadows ringing protection
+    float3 sharpening = amount * smoothstep(0.0, 0.03, length(dx) + length(dy))       // Gradient magnitude thresholding
+                               * (1.0 - smoothstep(0.95, 1.0, pixel_value))          // Highlight ringing protection
+                               * (0.6 + 0.4 * smoothstep(0.0, 0.1, pixel_value));   // Shadows ringing protection
 
     float3 blurred_pixel = gaussianBlur(inputImage, imageCoordinates);
 
@@ -381,9 +419,9 @@ float3 sharpenLuma(image2d_t inputImage, int2 imageCoordinates) {
     const float amount = 1.5;
 
     // Smart sharpening
-    float sharpening = amount * linstep(0.0, 0.03, length(dx) + length(dy))       // Gradient magnitude thresholding
-                              * (1.0 - linstep(0.95, 1.0, inputPixel.x))         // Highlight ringing protection
-                              * (0.6 + 0.4 * linstep(0.0, 0.1, inputPixel.x));  // Shadows ringing protection
+    float sharpening = amount * smoothstep(0.0, 0.03, length(dx) + length(dy))       // Gradient magnitude thresholding
+                              * (1.0 - smoothstep(0.95, 1.0, inputPixel.x))         // Highlight ringing protection
+                              * (0.6 + 0.4 * smoothstep(0.0, 0.1, inputPixel.x));  // Shadows ringing protection
 
     float blurred_pixel = gaussianBlurLuma(inputImage, imageCoordinates);
 
@@ -412,9 +450,6 @@ kernel void convertTosRGB(read_only image2d_t linearImage, write_only image2d_t 
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
     float3 linear = read_imagef(linearImage, imageCoordinates).xyz;
-
-    // Made this a separate pipeline step...
-//    linear = denoiseLumaChroma(linear, linearImage, imageCoordinates);
 
     linear = sharpen(linear, linearImage, imageCoordinates);
 

@@ -273,7 +273,7 @@ inline cl::ImageFormat cl_image<gls::rgba_pixel_fp32>::ImageFormat() {
     return cl::ImageFormat(CL_RGBA, CL_FLOAT);
 }
 
-#ifndef __APPLE__
+#if !(__APPLE__ && TARGET_CPU_X86_64)
 template <>
 inline cl::ImageFormat cl_image<gls::luma_pixel_fp16>::ImageFormat() {
     return cl::ImageFormat(CL_R, CL_HALF_FLOAT);

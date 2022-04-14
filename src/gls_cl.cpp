@@ -27,7 +27,7 @@ static const char* TAG = "CLImage";
 
 #ifdef __APPLE__
 
-OpenCLContext::OpenCLContext(const std::string& shadersRootPath) : _shadersRootPath(shadersRootPath) {
+OpenCLContext::OpenCLContext(const std::string& shadersRootPath, bool quiet) : _shadersRootPath(shadersRootPath) {
     _clContext = cl::Context::getDefault();
 
     std::vector<cl::Device> devices = _clContext.getInfo<CL_CONTEXT_DEVICES>();
@@ -44,14 +44,16 @@ OpenCLContext::OpenCLContext(const std::string& shadersRootPath) : _shadersRootP
     }
     cl::Device::setDefault(best_device);
 
-    cl::Device d = cl::Device::getDefault();
-    LOG_INFO(TAG) << "OpenCL Default Device: " << d.getInfo<CL_DEVICE_NAME>() << std::endl;
-    LOG_INFO(TAG) << "- Device Version: " << d.getInfo<CL_DEVICE_VERSION>() << std::endl;
-    LOG_INFO(TAG) << "- Driver Version: " << d.getInfo<CL_DRIVER_VERSION>() << std::endl;
-    LOG_INFO(TAG) << "- OpenCL C Version: " << d.getInfo<CL_DEVICE_OPENCL_C_VERSION>() << std::endl;
-    LOG_INFO(TAG) << "- Compute Units: " << d.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
-    LOG_INFO(TAG) << "- CL_DEVICE_MAX_WORK_GROUP_SIZE: " << d.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
-    LOG_INFO(TAG) << "- CL_DEVICE_EXTENSIONS: " << d.getInfo<CL_DEVICE_EXTENSIONS>() << std::endl;
+    if (!quiet) {
+        cl::Device d = cl::Device::getDefault();
+        LOG_INFO(TAG) << "OpenCL Default Device: " << d.getInfo<CL_DEVICE_NAME>() << std::endl;
+        LOG_INFO(TAG) << "- Device Version: " << d.getInfo<CL_DEVICE_VERSION>() << std::endl;
+        LOG_INFO(TAG) << "- Driver Version: " << d.getInfo<CL_DRIVER_VERSION>() << std::endl;
+        LOG_INFO(TAG) << "- OpenCL C Version: " << d.getInfo<CL_DEVICE_OPENCL_C_VERSION>() << std::endl;
+        LOG_INFO(TAG) << "- Compute Units: " << d.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
+        LOG_INFO(TAG) << "- CL_DEVICE_MAX_WORK_GROUP_SIZE: " << d.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
+        LOG_INFO(TAG) << "- CL_DEVICE_EXTENSIONS: " << d.getInfo<CL_DEVICE_EXTENSIONS>() << std::endl;
+    }
 }
 
 #elif __ANDROID__

@@ -150,7 +150,7 @@ typedef basic_luma_alpha_pixel<float> luma_alpha_pixel_fp32;
 typedef basic_rgb_pixel<float> rgb_pixel_fp32;
 typedef basic_rgba_pixel<float> rgba_pixel_fp32;
 
-#ifndef __APPLE__
+#if !(__APPLE__ && TARGET_CPU_X86_64)
 typedef __fp16 float16_t;
 typedef basic_luma_pixel<float16_t> luma_pixel_fp16;
 typedef basic_luma_alpha_pixel<float16_t> luma_alpha_pixel_fp16;
@@ -158,7 +158,7 @@ typedef basic_rgb_pixel<float16_t> rgb_pixel_fp16;
 typedef basic_rgba_pixel<float16_t> rgba_pixel_fp16;
 #endif
 
-#ifdef __APPLE__
+#if (__APPLE__ && TARGET_CPU_X86_64)
 typedef float float_type;
 #else
 typedef float16_t float_type;

@@ -629,7 +629,7 @@ int scaleRawData(gls::OpenCLContext* glsContext,
                  BayerPattern bayerPattern, gls::Vector<4> scaleMul, float blackLevel) {
     try {
         // Load the shader source
-        const auto demosaicProgram = glsContext->loadProgram("demosaic");
+        const auto program = glsContext->loadProgram("demosaic");
 
         // Bind the kernel parameters
         auto kernel = cl::KernelFunctor<cl::Image2D,  // rawImage
@@ -637,7 +637,7 @@ int scaleRawData(gls::OpenCLContext* glsContext,
                                         int,          // bayerPattern
                                         cl::Buffer,   // scaleMul
                                         float         // blackLevel
-                                        >(demosaicProgram, "scaleRawData");
+                                        >(program, "scaleRawData");
 
         cl::Buffer scaleMulBuffer(scaleMul.begin(), scaleMul.end(), true);
 
@@ -658,13 +658,13 @@ int interpolateGreen(gls::OpenCLContext* glsContext,
                      BayerPattern bayerPattern) {
     try {
         // Load the shader source
-        const auto demosaicProgram = glsContext->loadProgram("demosaic");
+        const auto program = glsContext->loadProgram("demosaic");
 
         // Bind the kernel parameters
         auto kernel = cl::KernelFunctor<cl::Image2D,  // rawImage
                                         cl::Image2D,  // greenImage
                                         int           // bayerPattern
-                                        >(demosaicProgram, "interpolateGreen");
+                                        >(program, "interpolateGreen");
 
         // Schedule the kernel on the GPU
         kernel(gls::OpenCLContext::buildEnqueueArgs(greenImage->width, greenImage->height),
@@ -684,14 +684,14 @@ int interpolateRedBlue(gls::OpenCLContext* glsContext,
                        BayerPattern bayerPattern) {
     try {
         // Load the shader source
-        const auto demosaicProgram = glsContext->loadProgram("demosaic");
+        const auto program = glsContext->loadProgram("demosaic");
 
         // Bind the kernel parameters
         auto kernel = cl::KernelFunctor<cl::Image2D,  // rawImage
                                         cl::Image2D,  // greenImage
                                         cl::Image2D,  // rgbImage
                                         int           // bayerPattern
-                                        >(demosaicProgram, "interpolateRedBlue");
+                                        >(program, "interpolateRedBlue");
 
         // Schedule the kernel on the GPU
         kernel(gls::OpenCLContext::buildEnqueueArgs(rgbImage->width, rgbImage->height),
@@ -704,17 +704,17 @@ int interpolateRedBlue(gls::OpenCLContext* glsContext,
     }
 }
 
-int applyKernel(gls::OpenCLContext* glsContext, const std::string& filterName,
+int applyKernel(gls::OpenCLContext* glsContext, const std::string& programName, const std::string& kernelName,
                 const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                 gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) {
     try {
         // Load the shader source
-        const auto program = glsContext->loadProgram("demosaic");
+        const auto program = glsContext->loadProgram(programName);
 
         // Bind the kernel parameters
         auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
                                         cl::Image2D   // outputImage
-                                        >(program, filterName);
+                                        >(program, kernelName);
 
         // Schedule the kernel on the GPU
         kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
@@ -733,7 +733,7 @@ int convertTosRGB(gls::OpenCLContext* glsContext,
                   const gls::Matrix<3, 3>& transform) {
     try {
         // Load the shader source
-        const auto demosaicProgram = glsContext->loadProgram("demosaic");
+        const auto program = glsContext->loadProgram("demosaic");
 
         // float4 transform[3];
         gls::Matrix<3, 4> paddedTransform;
@@ -749,7 +749,7 @@ int convertTosRGB(gls::OpenCLContext* glsContext,
         auto kernel = cl::KernelFunctor<cl::Image2D,  // linearImage
                                         cl::Image2D,  // rgbImage
                                         cl::Buffer    // transform
-                                        >(demosaicProgram, "convertTosRGB");
+                                        >(program, "convertTosRGB");
 
         // Schedule the kernel on the GPU
         kernel(gls::OpenCLContext::buildEnqueueArgs(rgbImage->width, rgbImage->height),
@@ -789,14 +789,14 @@ gls::image<gls::rgba_pixel>::unique_ptr demosaicImageGPU(const gls::image<gls::l
 
     interpolateRedBlue(&glsContext, clScaledRawImage, clGreenImage, &clLinearRGBImage, bayerPattern);
 
-    applyKernel(&glsContext, "rgbToYCbCrImage", clLinearRGBImage, &clLinearRGBImage);
+    applyKernel(&glsContext, "demosaic", "rgbToYCbCrImage", clLinearRGBImage, &clLinearRGBImage);
 
     gls::cl_image_2d<gls::rgba_pixel_float> clDenoisedRGBImage(clContext, rawImage.width, rawImage.height);
-    applyKernel(&glsContext, "denoiseImage", clLinearRGBImage, &clDenoisedRGBImage);
+    applyKernel(&glsContext, "demosaic", "denoiseImage", clLinearRGBImage, &clDenoisedRGBImage);
 
     // applyKernel(&glsContext, "sharpenLumaImage", clDenoisedRGBImage, &clLinearRGBImage);
 
-    applyKernel(&glsContext, "yCbCrtoRGBImage", clDenoisedRGBImage, &clDenoisedRGBImage);
+    applyKernel(&glsContext, "demosaic", "yCbCrtoRGBImage", clDenoisedRGBImage, &clDenoisedRGBImage);
 
 //    gls::cl_image_2d<gls::rgba_pixel_16> clSharpenedRGBImage(clContext, rawImage.width, rawImage.height);
 //    sharpenImage(&glsContext, clDenoisedRGBImage, &clSharpenedRGBImage);
